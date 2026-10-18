@@ -1,0 +1,381 @@
+diff --git a/build/ohos/app/app_internal.gni b/build/ohos/app/app_internal.gni
+index 7c0b7eec..bc057873 100644
+--- a/build/ohos/app/app_internal.gni
++++ b/build/ohos/app/app_internal.gni
+@@ -479,7 +479,7 @@ template("app_sign") {
+       _certificate_file,
+     ]
+ 
+-    outputs = [ "${target_out_dir}/${target_name}.stamp" ]
++    outputs = [ "${target_out_dir}/${target_name}_sign.stamp" ]
+ 
+     args = [
+       "--keyPwd",
+diff --git a/build/templates/bpf/BUILD.gn b/build/templates/bpf/BUILD.gn
+index 9b8688fb..0af85bcc 100644
+--- a/build/templates/bpf/BUILD.gn
++++ b/build/templates/bpf/BUILD.gn
+@@ -30,9 +30,11 @@ action("gen_bpf_uapi") {
+   kernel_dir = rebase_path(bpf_linux_kernel_dir, root_build_dir)
+   kernel_out_dir = rebase_path("${target_out_dir}/${bpf_inc_out_dir}")
+   kernel_tools_dir = rebase_path(kernel_tools_dir, root_build_dir)
++  stamp_file = rebase_path(
++      "${target_out_dir}/${target_name}_generated.stamp", root_build_dir)
+ 
+   script = "//build/templates/bpf/gen_bpf_uapi.py"
+-  outputs = [ "${target_out_dir}/${target_name}.stamp" ]
++  outputs = [ "${target_out_dir}/${target_name}_generated.stamp" ]
+   args = [
+     "--kernel-dir",
+     kernel_dir,
+@@ -42,5 +44,7 @@ action("gen_bpf_uapi") {
+     target_cpu,
+     "--kernel-tools-dir",
+     kernel_tools_dir,
++    "--stamp-file",
++    stamp_file,
+   ]
+ }
+diff --git a/build/templates/bpf/gen_bpf_uapi.py b/build/templates/bpf/gen_bpf_uapi.py
+index fe3f708a..7a774538 100755
+--- a/build/templates/bpf/gen_bpf_uapi.py
++++ b/build/templates/bpf/gen_bpf_uapi.py
+@@ -26,6 +26,7 @@ def main():
+     parser.add_argument('--kernel-out-dir', help='header file out dir')
+     parser.add_argument('--target-cpu', help='target cpu')
+     parser.add_argument('--kernel-tools-dir', help='kernel tools dir')
++    parser.add_argument('--stamp-file', help='action completion marker')
+     options = parser.parse_args()
+     make_tools_inc_dir = os.path.join(options.kernel_out_dir, 'bpf')
+     if not os.path.exists(make_tools_inc_dir):
+@@ -36,8 +37,12 @@ def main():
+     make_tools_uapi_cmd = ['make', '-C', options.kernel_tools_dir,
+                            'O={}'.format(make_tools_inc_dir),
+                            'ARCH={}'.format(options.target_cpu)]
+-    subprocess.run(make_uapi_cmd)
+-    subprocess.run(make_tools_uapi_cmd)
++    subprocess.run(make_uapi_cmd, check=True)
++    subprocess.run(make_tools_uapi_cmd, check=True)
++    if options.stamp_file:
++        os.makedirs(os.path.dirname(options.stamp_file), exist_ok=True)
++        with open(options.stamp_file, 'a'):
++            pass
+ 
+ if __name__ == '__main__':
+     sys.exit(main())
+diff --git a/base/account/os_account/services/accountmgr/test/moduletest/common/BUILD.gn b/base/account/os_account/services/accountmgr/test/moduletest/common/BUILD.gn
+index 1252574a..ad40a681 100644
+--- a/base/account/os_account/services/accountmgr/test/moduletest/common/BUILD.gn
++++ b/base/account/os_account/services/accountmgr/test/moduletest/common/BUILD.gn
+@@ -73,7 +73,7 @@ ohos_moduletest("account_permission_manager_module_test") {
+   ]
+ }
+ 
+-ohos_moduletest("bundle_manager_adapter_module_test") {
++ohos_moduletest("common_bundle_manager_adapter_module_test") {
+   branch_protector_ret = "pac_ret"
+ 
+   sanitize = {
+@@ -117,6 +117,6 @@ group("moduletest") {
+ 
+   deps = [
+     ":account_permission_manager_module_test",
+-    ":bundle_manager_adapter_module_test",
++    ":common_bundle_manager_adapter_module_test",
+   ]
+ }
+diff --git a/foundation/multimedia/audio_framework/services/audio_policy/server/src/service/audio_policy_service.cpp b/foundation/multimedia/audio_framework/services/audio_policy/server/src/service/audio_policy_service.cpp
+index 9d745f4f1f..800e0385e7 100644
+--- a/foundation/multimedia/audio_framework/services/audio_policy/server/src/service/audio_policy_service.cpp
++++ b/foundation/multimedia/audio_framework/services/audio_policy/server/src/service/audio_policy_service.cpp
+@@ -8672,6 +8672,7 @@ void AudioPolicyService::WriteServiceStartupError(string reason)
+     Media::MediaMonitor::MediaMonitorManager::GetInstance().WriteLogMsg(bean);
+ }
+ 
++#ifdef FEATURE_DTMF_TONE
+ bool AudioPolicyService::LoadToneDtmfConfig()
+ {
+     AUDIO_INFO_LOG("Enter");
+@@ -8695,6 +8696,7 @@ bool AudioPolicyService::LoadToneDtmfConfig()
+     AUDIO_INFO_LOG("Done");
+     return true;
+ }
++#endif
+ 
+ int32_t AudioPolicyService::SetAudioConcurrencyCallback(const uint32_t sessionID, const sptr<IRemoteObject> &object)
+ {
+diff --git a/developtools/ace_ets2bundle/BUILD.gn b/developtools/ace_ets2bundle/BUILD.gn
+index c703e73b..5536008a 100644
+--- a/developtools/ace_ets2bundle/BUILD.gn
++++ b/developtools/ace_ets2bundle/BUILD.gn
+@@ -364,6 +364,8 @@ action("install_arkguard_tsc") {
+         "${root_out_dir}/obj/arkcompiler/ets_frontend/arkguard/arkguard-1.1.3.tgz"),
+     rebase_path("//developtools/ace_ets2bundle/compiler"),
+     current_os,
++    rebase_path(
++        "${target_out_dir}/${target_name}_generated.stamp", root_build_dir),
+   ]
+-  outputs = [ "${target_out_dir}/${target_name}.stamp" ]
++  outputs = [ "${target_out_dir}/${target_name}_generated.stamp" ]
+ }
+diff --git a/developtools/ace_ets2bundle/install_arkguard_tsc.py b/developtools/ace_ets2bundle/install_arkguard_tsc.py
+index 61284e51..aef43d0b 100755
+--- a/developtools/ace_ets2bundle/install_arkguard_tsc.py
++++ b/developtools/ace_ets2bundle/install_arkguard_tsc.py
+@@ -54,10 +54,14 @@ def run(args):
+     arkguard_path = args[1]
+     source_path = args[2]
+     current_os = args[3]
++    stamp_path = args[4]
+     node_modules_path = os.path.join(source_path, "node_modules")
+     extract(tsc_path, node_modules_path, 'typescript', current_os)
+     extract(arkguard_path, node_modules_path, 'arkguard', current_os)
++    os.makedirs(os.path.dirname(stamp_path), exist_ok=True)
++    with open(stamp_path, 'a'):
++        pass
+ 
+ 
+ if __name__ == "__main__":
+-    run(sys.argv[1:])
+\ No newline at end of file
++    run(sys.argv[1:])
+diff --git a/foundation/distributeddatamgr/kv_store/frameworks/libs/distributeddb/gaussdb_rd/test/unittest/BUILD.gn b/foundation/distributeddatamgr/kv_store/frameworks/libs/distributeddb/gaussdb_rd/test/unittest/BUILD.gn
+index a23631f3d..5d1a4916d 100644
+--- a/foundation/distributeddatamgr/kv_store/frameworks/libs/distributeddb/gaussdb_rd/test/unittest/BUILD.gn
++++ b/foundation/distributeddatamgr/kv_store/frameworks/libs/distributeddb/gaussdb_rd/test/unittest/BUILD.gn
+@@ -41,7 +41,7 @@ config("module_private_config") {
+ }
+ 
+ ###############################################################################
+-ohos_source_set("src_file") {
++ohos_source_set("gaussdb_rd_unittest_src_file") {
+   testonly = true
+ 
+   sources = [
+@@ -118,7 +118,7 @@ template("gaussdb_rd_unittest") {
+     }
+ 
+     deps += [
+-      ":src_file",
++      ":gaussdb_rd_unittest_src_file",
+       "//third_party/googletest:gmock_main",
+       "//third_party/googletest:gtest_main",
+       "//third_party/sqlite:sqlite",
+diff --git a/foundation/distributeddatamgr/kv_store/frameworks/libs/distributeddb/test/fuzztest/json_fuzzer/BUILD.gn b/foundation/distributeddatamgr/kv_store/frameworks/libs/distributeddb/test/fuzztest/json_fuzzer/BUILD.gn
+index 48bf2bc8c..5ed1e7efe 100644
+--- a/foundation/distributeddatamgr/kv_store/frameworks/libs/distributeddb/test/fuzztest/json_fuzzer/BUILD.gn
++++ b/foundation/distributeddatamgr/kv_store/frameworks/libs/distributeddb/test/fuzztest/json_fuzzer/BUILD.gn
+@@ -41,7 +41,7 @@ config("module_private_config") {
+ }
+ 
+ ###############################################################################
+-ohos_source_set("src_file") {
++ohos_source_set("json_fuzzer_src_file") {
+   testonly = true
+ 
+   sources = [
+@@ -104,7 +104,7 @@ ohos_fuzztest("JsonFuzzTest") {
+   }
+   configs = [ ":module_private_config" ]
+   deps += [
+-    ":src_file",
++    ":json_fuzzer_src_file",
+     "//third_party/sqlite:sqlite",
+   ]
+   configs += [ "//third_party/cJSON:cJSON_config" ]
+diff --git a/foundation/distributeddatamgr/kv_store/frameworks/libs/distributeddb/test/fuzztest/jsoninner_fuzzer/BUILD.gn b/foundation/distributeddatamgr/kv_store/frameworks/libs/distributeddb/test/fuzztest/jsoninner_fuzzer/BUILD.gn
+index d3823c7e3..0c530478b 100644
+--- a/foundation/distributeddatamgr/kv_store/frameworks/libs/distributeddb/test/fuzztest/jsoninner_fuzzer/BUILD.gn
++++ b/foundation/distributeddatamgr/kv_store/frameworks/libs/distributeddb/test/fuzztest/jsoninner_fuzzer/BUILD.gn
+@@ -41,7 +41,7 @@ config("module_private_config") {
+ }
+ 
+ ###############################################################################
+-ohos_source_set("src_file") {
++ohos_source_set("jsoninner_fuzzer_src_file") {
+   testonly = true
+ 
+   sources = [
+@@ -104,7 +104,7 @@ ohos_fuzztest("JsonInnerFuzzTest") {
+   }
+   configs = [ ":module_private_config" ]
+   deps += [
+-    ":src_file",
++    ":jsoninner_fuzzer_src_file",
+     "//third_party/sqlite:sqlite",
+   ]
+   configs += [ "//third_party/cJSON:cJSON_config" ]
+diff --git a/foundation/graphic/graphic_2d/rosen/test/render_service/render_service/unittest/drawable/BUILD.gn b/foundation/graphic/graphic_2d/rosen/test/render_service/render_service/unittest/drawable/BUILD.gn
+index b6668fe59a..1bf18a7e31 100644
+--- a/foundation/graphic/graphic_2d/rosen/test/render_service/render_service/unittest/drawable/BUILD.gn
++++ b/foundation/graphic/graphic_2d/rosen/test/render_service/render_service/unittest/drawable/BUILD.gn
+@@ -43,7 +43,7 @@ config("drawable_test") {
+ ohos_unittest("RSCanvasDrawingRenderNodeDrawableTest") {
+   module_out_path = module_output_path
+   sources = [ "rs_canvas_drawing_render_node_drawable_test.cpp" ]
+-  deps = [ ":rs_test_common" ]
++  deps = [ ":drawable_rs_test_common" ]
+   external_deps = [
+     "c_utils:utils",
+     "hilog:libhilog",
+@@ -60,7 +60,7 @@ ohos_unittest("RSCanvasRenderNodeDrawableTest") {
+     "$graphic_2d_root/rosen/modules/render_service_base/src/pipeline/rs_canvas_render_node.cpp",
+     "rs_canvas_render_node_drawable_test.cpp",
+   ]
+-  deps = [ ":rs_test_common" ]
++  deps = [ ":drawable_rs_test_common" ]
+   external_deps = [
+     "c_utils:utils",
+     "hilog:libhilog",
+@@ -71,7 +71,7 @@ ohos_unittest("RSCanvasRenderNodeDrawableTest") {
+ ohos_unittest("RSDisplayRenderNodeDrawableTest") {
+   module_out_path = module_output_path
+   sources = [ "rs_display_render_node_drawable_test.cpp" ]
+-  deps = [ ":rs_test_common" ]
++  deps = [ ":drawable_rs_test_common" ]
+   external_deps = [
+     "c_utils:utils",
+     "hilog:libhilog",
+@@ -85,7 +85,7 @@ ohos_unittest("RSDisplayRenderNodeDrawableTest") {
+ ohos_unittest("RSEffectRenderNodeDrawableTest") {
+   module_out_path = module_output_path
+   sources = [ "rs_effect_render_node_drawable_test.cpp" ]
+-  deps = [ ":rs_test_common" ]
++  deps = [ ":drawable_rs_test_common" ]
+   external_deps = [
+     "c_utils:utils",
+     "hilog:libhilog",
+@@ -96,7 +96,7 @@ ohos_unittest("RSEffectRenderNodeDrawableTest") {
+ ohos_unittest("RSRenderNodeDrawableAdapterTest") {
+   module_out_path = module_output_path
+   sources = [ "rs_render_node_drawable_adapter_test.cpp" ]
+-  deps = [ ":rs_test_common" ]
++  deps = [ ":drawable_rs_test_common" ]
+   external_deps = [
+     "c_utils:utils",
+     "hilog:libhilog",
+@@ -110,7 +110,7 @@ ohos_unittest("RSRenderNodeDrawableAdapterTest") {
+ ohos_unittest("RSRenderNodeDrawableAutoCacheTest") {
+   module_out_path = module_output_path
+   sources = [ "rs_render_node_drawable_autocache_test.cpp" ]
+-  deps = [ ":rs_test_common" ]
++  deps = [ ":drawable_rs_test_common" ]
+   external_deps = [
+     "c_utils:utils",
+     "hilog:libhilog",
+@@ -124,7 +124,7 @@ ohos_unittest("RSRenderNodeDrawableAutoCacheTest") {
+ ohos_unittest("RSRenderNodeDrawableTest") {
+   module_out_path = module_output_path
+   sources = [ "rs_render_node_drawable_test.cpp" ]
+-  deps = [ ":rs_test_common" ]
++  deps = [ ":drawable_rs_test_common" ]
+   external_deps = [
+     "c_utils:utils",
+     "hilog:libhilog",
+@@ -135,7 +135,7 @@ ohos_unittest("RSRenderNodeDrawableTest") {
+ ohos_unittest("RSRootRenderNodeDrawableTest") {
+   module_out_path = module_output_path
+   sources = [ "rs_root_render_node_drawable_test.cpp" ]
+-  deps = [ ":rs_test_common" ]
++  deps = [ ":drawable_rs_test_common" ]
+   external_deps = [
+     "c_utils:utils",
+     "hilog:libhilog",
+@@ -146,7 +146,7 @@ ohos_unittest("RSRootRenderNodeDrawableTest") {
+ ohos_unittest("RSSurfaceRenderNodeDrawableTest") {
+   module_out_path = module_output_path
+   sources = [ "rs_surface_render_node_drawable_test.cpp" ]
+-  deps = [ ":rs_test_common" ]
++  deps = [ ":drawable_rs_test_common" ]
+   external_deps = [
+     "c_utils:utils",
+     "hilog:libhilog",
+@@ -160,7 +160,7 @@ ohos_unittest("RSSurfaceRenderNodeDrawableTest") {
+ ohos_unittest("RSUIFirstSurfaceRenderNodeDrawableTest") {
+   module_out_path = module_output_path
+   sources = [ "rs_ui_first_surface_render_node_drawable_test.cpp" ]
+-  deps = [ ":rs_test_common" ]
++  deps = [ ":drawable_rs_test_common" ]
+   external_deps = [
+     "c_utils:utils",
+     "hilog:libhilog",
+@@ -174,7 +174,7 @@ ohos_unittest("RSUIFirstSurfaceRenderNodeDrawableTest") {
+ ohos_unittest("RSDirtyRectsDFXTest") {
+   module_out_path = module_output_path
+   sources = [ "dfx/rs_dirty_rects_dfx_test.cpp" ]
+-  deps = [ ":rs_test_common" ]
++  deps = [ ":drawable_rs_test_common" ]
+   external_deps = [
+     "c_utils:utils",
+     "hilog:libhilog",
+@@ -188,7 +188,7 @@ ohos_unittest("RSDirtyRectsDFXTest") {
+ ohos_unittest("RSSkpCaptureDFXTest") {
+   module_out_path = module_output_path
+   sources = [ "dfx/rs_skp_capture_dfx_test.cpp" ]
+-  deps = [ ":rs_test_common" ]
++  deps = [ ":drawable_rs_test_common" ]
+   external_deps = [
+     "c_utils:utils",
+     "hilog:libhilog",
+@@ -225,7 +225,7 @@ config("rs_test_common_public_config") {
+   ]
+ }
+ 
+-ohos_static_library("rs_test_common") {
++ohos_static_library("drawable_rs_test_common") {
+   visibility = [ ":*" ]
+   testonly = true
+   defines = []
+diff --git a/foundation/multimedia/av_codec/test/unittest/video_test/vcodec_server_test/BUILD.gn b/foundation/multimedia/av_codec/test/unittest/video_test/vcodec_server_test/BUILD.gn
+index 935488f71..2880eec6e 100644
+--- a/foundation/multimedia/av_codec/test/unittest/video_test/vcodec_server_test/BUILD.gn
++++ b/foundation/multimedia/av_codec/test/unittest/video_test/vcodec_server_test/BUILD.gn
+@@ -104,7 +104,7 @@ ohos_unittest("codec_server_coverage_unit_test") {
+   ]
+ 
+   deps = [
+-    ":av_codec_engine_codeclist_mock",  # av_codec_engine_codeclist_mock
++    ":vcodec_server_codeclist_mock",
+     "$av_codec_root_dir/services/dfx:av_codec_service_dfx",
+     "$av_codec_root_dir/services/utils:av_codec_service_utils",
+     "//third_party/googletest:gmock_main",
+@@ -128,7 +128,7 @@ ohos_unittest("codec_server_coverage_unit_test") {
+ 
+ # 目的：反复mock单例模式的初始化方法
+ # 作用：defines将CodecAbilitySingleton替换成Impl，在测试用例中继承Impl并重写GetInstance方法
+-ohos_static_library("av_codec_engine_codeclist_mock") {
++ohos_static_library("vcodec_server_codeclist_mock") {
+   testonly = true
+   cflags = av_codec_unittest_cflags
+   cflags_cc = cflags
+@@ -172,4 +172,3 @@ ohos_static_library("av_codec_engine_codeclist_mock") {
+ }
+ 
+ ##################################################################################################################
+-
+--- a/vendor/ascend/310B/security_config/sanitizer_check_list.gni
++++ b/vendor/ascend/310B/security_config/sanitizer_check_list.gni
+@@ -1265,11 +1265,15 @@
+   "av_codec_capi_unit_test",  # test target, not required to enable cfi
+   "av_codec_inner_unit_test",  # test target, not required to enable cfi
+   "av_codec_engine_codeclist_mock",  # test target, not required to enable cfi
++  "vcodec_server_codeclist_mock",  # test target, not required to enable cfi
+ ]
+ 
+ # kv_store : //foundation/distributeddatamgr/kv_store
+ bypass_kv_store = [
+   "distributeddb",
++  "gaussdb_rd_unittest_src_file",
++  "json_fuzzer_src_file",
++  "jsoninner_fuzzer_src_file",
+   "distributeddata_inner",
+   "src_file",
+   "kvdb_src_file",
+@@ -1375,6 +1379,7 @@
+   "render_frame_trace",
+   "rs_frame_report_ext",  # not required to enable cfi
+   "rs_frame_report_ext_surface",  # not required to enable cfi
++  "drawable_rs_test_common",
+   "libhyper_graphic_manager",
+   "texgine_sample",
+   "texgine_sample_align",

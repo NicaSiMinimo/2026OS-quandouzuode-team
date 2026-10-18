@@ -1,0 +1,53 @@
+% !TeX root = ../main.tex
+
+\clearpage
+\thispagestyle{plain}
+
+\vspace{1cm}
+
+\begin{center}
+{\fontsize{18bp}{22bp}\sffamily\bfseries 文档更新说明}
+\end{center}
+
+\vspace{1cm}
+
+\renewcommand\arraystretch{1.8}
+\begin{longtable}{|>{\centering\arraybackslash}m{2cm}|>{\centering\arraybackslash}m{7cm}|>{\centering\arraybackslash}m{2.5cm}|>{\centering\arraybackslash}m{2.5cm}|}
+\hline
+\textbf{版本} & \textbf{版本更新说明} & \textbf{撰写人} & \textbf{完成日期} \\
+\hline
+\endfirsthead
+\hline
+\textbf{版本} & \textbf{版本更新说明} & \textbf{撰写人} & \textbf{完成日期} \\
+\hline
+\endhead
+\hline
+\endfoot
+
+V1.0 & 初始版本，撰写第一章移植相关的内容 & 杨洋 & 2026年05月18日 \\
+\hline
+V1.1 & 补充源码编译流程、已知问题修复方法及镜像制作与烧录步骤 & 杨洋 & 2026年05月25日 \\
+\hline
+V1.2 & 新增昇腾 CANN 推理引擎移植章节，安装部署、环境变量配置及 NPU 验证 & 杨洋 & 2026年06月03日 \\
+\hline
+V1.3 & 新增 YOLOv5 目标检测推理应用开发章节，ONNX 转 OM、CLI 部署与推理流程 & 潘孝成 & 2026年06月10日 \\
+\hline
+V1.4 & 完善 YOLOv5 CLI 代码结构说明、输出张量兼容性及批量推理功能 & 潘孝成 & 2026年06月18日 \\
+\hline
+V1.5 & 新增第四章内存优化章节 & 潘孝成 & 2026年06月21日 \\
+\hline
+V1.6 & 新增第四章时间优化章节 & 芦甲翔 & 2026年06月22日 \\
+\hline
+V1.7 & 完善第四章节内存优化和时间优化的相关内容 & 潘孝成 & 2026年06月27日 \\
+\hline
+V1.8 & 全文校对与格式统一 & 杨洋 & 2026年06月28日 \\
+\hline
+V1.9 & 增加文档图片展示，全文校对与格式统一，补充参考链接，完成最终版本 & 潘孝成 & 2026年06月30日 \\
+\hline
+V1.10 & 新增附录：HDMI 音频排查与构建修复记录（DT compatible 大小写、ninja 内核跳过、工具链 PATH 修复、HDC USB Gadget 启动修复）；第三章补充 YOLOv5 App 实时摄像头检测与原生 NPU 推理说明 & 杨洋 & 2026年08月12日 \\
+\hline
+V1.11 & 补充单应用专用系统二次裁剪、HDMI 音频完整链路、DRM/EDID 显示修复、Camera/ImageReceiver 生命周期修复、CANN 运行时随镜像部署与 5001 推理服务自启动，以及 GN/Ninja 构建闭环验证 & 杨洋 & 2026年08月14日 \\
+\hline
+V1.12 & 新增 OHOS 4000/Ninja 构建故障排查记录，补充重复输出、条件编译、BPF action 返回值及 sanitizer 配置修复，并记录 GN 与目标构建验证命令 & 杨洋 & 2026年08月17日 \\
+\hline
+\end{longtable}

@@ -1,0 +1,115 @@
+% !TeX root = ./main.tex
+
+\hfutsetup{
+  title              = {OpenHarmony标准版适配启智01开发者套件（基于昇腾310B）并完成NPU推理功能},
+  title*             = {Adapting OpenHarmony Standard to Qizhi01 Developer Kit (Based on Ascend 310B) with NPU Inference},
+  author             = {潘孝成~~杨洋~~芦甲翔},
+  author*            = {Pan Xiaocheng, Yang Yang, Lu Jiaxiang},
+  stulist            = {2023213497~~2023213496~~2023213499},
+  speciality         = {软件工程},
+  supervisor         = {李琳~~张本宏},
+  department         = {软件学院},
+  % date               = {2025-07},
+}
+
+% 加载宏包
+
+% 代码高亮
+\usepackage{listings}
+\usepackage{xcolor}
+
+\renewcommand{\lstlistingname}{代码清单}
+\definecolor{codebg}{RGB}{245,245,245}
+\definecolor{codegreen}{RGB}{0,128,0}
+\definecolor{codegray}{RGB}{128,128,128}
+\definecolor{codeblue}{RGB}{0,0,200}
+\definecolor{codepurple}{RGB}{128,0,128}
+
+\lstset{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  framesep=5pt,
+  rulecolor=\color{codegray},
+  commentstyle=\color{codegreen},
+  keywordstyle=\color{codeblue},
+  stringstyle=\color{codepurple},
+  numbers=left,
+  numberstyle=\tiny\color{codegray},
+  numbersep=8pt,
+  tabsize=4,
+  showstringspaces=false,
+  captionpos=b,
+  aboveskip=10pt,
+  belowskip=10pt,
+}
+
+% Shell 命令样式
+\lstdefinestyle{shell}{
+  language=bash,
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codegray},
+  commentstyle=\color{codegreen}\itshape,
+  keywordstyle=\color{codeblue}\bfseries,
+  stringstyle=\color{codepurple},
+  showstringspaces=false,
+  numbers=none,
+  tabsize=4,
+  breaklines=true,
+}
+
+% 定理类环境宏包
+\usepackage{amsthm}
+
+% 插图
+\usepackage{graphicx}
+
+% [H] 浮动体固定位置
+\usepackage{float}
+
+% 三线表
+\usepackage{booktabs}
+
+% 跨页表格
+\usepackage{longtable}
+
+% 算法
+\usepackage[ruled,linesnumbered]{algorithm2e}
+
+% SI 量和单位
+\usepackage{siunitx}
+
+% 参考文献使用 BibTeX + natbib 宏包
+% \usepackage[sort]{natbib}
+% \bibliographystyle{hfutthesis-numerical}
+
+% 配置图片的默认目录
+\graphicspath{{figures/}}
+
+% 数学命令
+\makeatletter
+\newcommand\dif{%
+  \mathop{}\!%
+  \ifhfut@math@style@TeX
+    d%
+  \else
+    \mathrm{d}%
+  \fi
+}
+\makeatother
+\newcommand\eu{{\symup{e}}}
+\newcommand\iu{{\symup{i}}}
+
+% xurl 允许 URL 在任意位置断行，避免长 URL 换行异常
+\usepackage{xurl}
+
+% hyperref 宏包在最后调用
+\usepackage{hyperref}
+\hypersetup{
+  linkcolor  = black,
+  citecolor  = black,
+  urlcolor   = black,
+}

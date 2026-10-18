@@ -1,0 +1,61 @@
+--- a/device/board/ascend/310B/cfg/BUILD.gn
++++ b/device/board/ascend/310B/cfg/BUILD.gn
+@@ -34,10 +34,58 @@
+   install_enable = true
+ }
+ 
++ohos_prebuilt_etc("init.310B.yolov5.cfg") {
++  source = "init.310B.yolov5.cfg"
++  part_name = "device_310B"
++  install_images = [ chipset_base_dir ]
++  install_enable = true
++}
++
++ohos_prebuilt_etc("setup_network.sh") {
++  source = "setup_network.sh"
++  part_name = "device_310B"
++  install_images = [ chipset_base_dir ]
++  install_enable = true
++}
++
++ohos_prebuilt_etc("setup_ascend_env.sh") {
++  source = "setup_ascend_env.sh"
++  part_name = "device_310B"
++  install_images = [ chipset_base_dir ]
++  install_enable = true
++}
++
++ohos_prebuilt_etc("start_yolov5_server.sh") {
++  source = "start_yolov5_server.sh"
++  part_name = "device_310B"
++  install_images = [ chipset_base_dir ]
++  install_enable = true
++}
++
++ohos_prebuilt_etc("run_yolo_acl_service.sh") {
++  source = "run_yolo_acl_service.sh"
++  part_name = "device_310B"
++  install_images = [ chipset_base_dir ]
++  install_enable = true
++}
++
++ohos_prebuilt_etc("yolo_acl_service.py") {
++  source = "yolo_acl_service.py"
++  part_name = "device_310B"
++  install_images = [ chipset_base_dir ]
++  install_enable = true
++}
++
+ group("init_configs") {
+   deps = [
+     ":fstab.310B",
+     ":init.310B.cfg",
+     ":init.310B.usb.cfg",
++    ":init.310B.yolov5.cfg",
++    ":setup_network.sh",
++    ":setup_ascend_env.sh",
++    ":start_yolov5_server.sh",
++    ":run_yolo_acl_service.sh",
++    ":yolo_acl_service.py",
+   ]
+ }

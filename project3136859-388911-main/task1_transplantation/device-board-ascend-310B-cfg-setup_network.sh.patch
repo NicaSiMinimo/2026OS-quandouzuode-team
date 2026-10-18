@@ -1,0 +1,19 @@
+--- a/device/board/ascend/310B/cfg/setup_network.sh
++++ b/device/board/ascend/310B/cfg/setup_network.sh
+@@ -0,0 +1,16 @@
++#!/system/bin/sh
++export PATH=/bin:/system/bin:/vendor/bin:/sbin:/usr/sbin:/vendor/sbin:/system/sbin:/usr/local/Python/bin:$PATH
++ln -sf /bin/busybox /bin/route
++ln -sf /bin/busybox /bin/arp
++ln -sf /bin/busybox /bin/wget
++ln -sf /bin/busybox /bin/netstat
++ln -sf /bin/busybox /bin/ip
++ifconfig eth0 down
++ifconfig wlan0 down
++ifconfig bond0 down
++ifconfig p2p0 down
++ifconfig eth1 192.168.137.100 netmask 255.255.255.0 up
++route add default gw 192.168.137.1 eth1
++echo nameserver 192.168.137.1 > /etc/resolv.conf
++echo nameserver 222.195.2.42 >> /etc/resolv.conf
++echo nameserver 222.195.2.36 >> /etc/resolv.conf

@@ -1,0 +1,19 @@
+--- a/foundation/barrierfree/accessibility/sa_profile/accessibility.cfg
++++ b/foundation/barrierfree/accessibility/sa_profile/accessibility.cfg
+@@ -3,14 +3,14 @@
+             "name" : "post-fs-data",
+             "cmds" : [
+                 "mkdir /data/service/el1/public/barrierfree 0711 accessibility accessibility",
+-                "mkdir /data/service/el1/public/barrierfree/accessibility_ability_manager_service 0711 accessibility accessibility",
+-                "start accessibility"
++                "mkdir /data/service/el1/public/barrierfree/accessibility_ability_manager_service 0711 accessibility accessibility"
+             ]
+         }
+     ],
+     "services" : [{
+             "name" : "accessibility",
+             "path" : ["/system/bin/sa_main", "/system/profile/accessibility.json"],
++            "ondemand" : true,
+             "uid" : "accessibility",
+             "gid" : ["accessibility", "shell"],
+             "secon" : "u:r:accessibility:s0",

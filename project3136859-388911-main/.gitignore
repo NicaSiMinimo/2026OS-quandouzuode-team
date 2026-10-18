@@ -1,0 +1,7 @@
+# 编辑器/IDE 本地配置
+.vscode/
+.idea/
+
+# 大体积媒体资源：background.mp4 约 114MB，超过 GitLab 常规单文件上限(100MB)，
+# 不入库；如需版本管理请改用 Git LFS 或网盘分发。
+task3_yolov5/yolov5_app/entry/src/main/resources/rawfile/background.mp4

@@ -1,0 +1,9 @@
+--- a/vendor/ascend/310B/etc/param/hardware_310B.para
++++ b/vendor/ascend/310B/etc/param/hardware_310B.para
+@@ -12,3 +12,6 @@
+ # limitations under the License.
+ 
+ const.product.hardwareversion=default
++persist.hdc.control = "true"
++persist.hdc.mode.usb = "enable"
++persist.hdc.mode.tcp = "disable"

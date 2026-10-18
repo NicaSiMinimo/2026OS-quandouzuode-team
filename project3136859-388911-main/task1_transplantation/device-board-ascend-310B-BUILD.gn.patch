@@ -1,0 +1,10 @@
+--- a/device/board/ascend/310B/BUILD.gn
++++ b/device/board/ascend/310B/BUILD.gn
+@@ -24,6 +24,7 @@
+     "//device/soc/ascend/310B/hardware:hardware_group",
+     "ascendinstall:ascendinstall",
+     "//device/board/ascend/310B/audio_alsa:audio",
++    "yolov5:yolov5_files",
+   ]
+    if (is_support_graphic) {
+     deps += [

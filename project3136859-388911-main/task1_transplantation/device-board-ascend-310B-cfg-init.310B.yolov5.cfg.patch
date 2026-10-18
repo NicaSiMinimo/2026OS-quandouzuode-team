@@ -1,0 +1,27 @@
+diff --git a/device/board/ascend/310B/cfg/init.310B.yolov5.cfg b/device/board/ascend/310B/cfg/init.310B.yolov5.cfg
+new file mode 100644
+index 0000000..0a5fdc3
+--- /dev/null
++++ b/device/board/ascend/310B/cfg/init.310B.yolov5.cfg
+@@ -0,0 +1,21 @@
++{
++    "services" : [{
++            "name" : "yolov5_server",
++            "start-mode" : "condition",
++            "path" : ["/system/bin/sh", "/vendor/etc/start_yolov5_server.sh"],
++            "sandbox" : 0,
++            "uid" : "HwHiAiUser",
++            "gid" : ["HwHiAiUser", "HwBaseUser", "HwDmUser"],
++            "once" : 1,
++            "disabled" : 0
++    }, {
++            "name" : "yolo_acl_service",
++            "start-mode" : "boot",
++            "path" : ["/system/bin/sh", "/vendor/etc/run_yolo_acl_service.sh"],
++            "sandbox" : 0,
++            "uid" : "HwHiAiUser",
++            "gid" : ["HwHiAiUser", "HwBaseUser", "HwDmUser"],
++            "once" : 0,
++            "disabled" : 0
++    }]
++}

@@ -1,0 +1,20 @@
+diff --git a/device/board/ascend/310B/ascendinstall/BUILD.gn b/device/board/ascend/310B/ascendinstall/BUILD.gn
+index a747f2f..7db2fce 100644
+--- a/device/board/ascend/310B/ascendinstall/BUILD.gn
++++ b/device/board/ascend/310B/ascendinstall/BUILD.gn
+@@ -114,8 +114,15 @@ ohos_prebuilt_executable("busybox") {
+   part_name = "device_310B"
+ }
+ 
++ohos_prebuilt_etc("ascend_post_boot") {
++  source = "$ASCEND_INSTALL_DIR/ascend_post_boot.sh"
++  module_install_dir = "var/"
++  part_name = "device_310B"
++}
++
+ group("ascendinstall") {
+   deps = [
++    ":ascend_post_boot",
+     ":ascend_common_init",
+     ":init",
+     ":install_dev",

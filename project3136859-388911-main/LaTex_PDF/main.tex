@@ -1,0 +1,38 @@
+% !TeX encoding = UTF-8
+% !TeX program = xelatex
+% !TeX spellcheck = en_US
+
+\documentclass[degree=bachelor,output=electronic]{hfutthesis}
+% degree      = doctor | master | bachelor
+% degree-type = academic | professional
+% language    = chinese | english
+% fontset     = windows | mac | ubuntu | fandol
+
+% 加载宏包、全部的配置
+\input{hfutsetup.tex}
+
+
+\begin{document}
+
+% 封面
+\maketitle
+
+% 文档更新说明
+\input{chapters/changelog.tex}
+
+% 目录
+\tableofcontents
+
+% 正文
+\mainmatter
+\input{chapters/chapter1.tex}
+\input{chapters/chapter2.tex}
+\input{chapters/chapter3.tex}
+\input{chapters/chapter4.tex}
+
+% 附录
+\appendix
+\input{chapters/appendix.tex}
+\input{chapters/debug_log.tex}
+
+\end{document}

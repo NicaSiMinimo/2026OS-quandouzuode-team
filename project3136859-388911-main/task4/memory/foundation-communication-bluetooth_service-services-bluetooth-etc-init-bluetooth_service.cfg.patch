@@ -1,0 +1,19 @@
+--- a/foundation/communication/bluetooth_service/services/bluetooth/etc/init/bluetooth_service.cfg
++++ b/foundation/communication/bluetooth_service/services/bluetooth/etc/init/bluetooth_service.cfg
+@@ -6,14 +6,14 @@
+                 "mkdir /data/bluetooth/log",
+                 "chown bluetooth bluetooth /data/bluetooth",
+                 "chown bluetooth bluetooth /data/bluetooth/log",
+-                "mkdir /data/service/el1/public/bluetooth 0711 bluetooth bluetooth",
+-                "start bluetooth_service"
++                "mkdir /data/service/el1/public/bluetooth 0711 bluetooth bluetooth"
+             ]
+         }
+     ],
+     "services" : [{
+             "name" : "bluetooth_service",
+             "path" : ["/system/bin/sa_main", "/system/profile/bluetooth_service.json"],
++            "ondemand" : true,
+             "uid" : "bluetooth",
+             "gid" : ["bluetooth", "shell"],
+             "caps" : ["CAP_NET_ADMIN"],

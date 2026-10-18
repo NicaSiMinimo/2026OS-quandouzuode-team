@@ -1,0 +1,62 @@
+% !TeX root = ../main.tex
+
+\chapter{参考链接}
+
+\newcounter{refnum}
+\newcommand{\refitem}[2]{%
+  \stepcounter{refnum}%
+  \item[\textbf{[\therefnum]}\label{#1}] #2%
+}
+
+\section{官方文档与社区}
+
+\begin{enumerate}[label={\textbf{[\arabic*]}}, leftmargin=4em, labelwidth=2em, labelsep=0.3em, align=left]
+  \refitem{ref:oh-docs}{OpenHarmony 官方文档：\url{https://gitee.com/openharmony/docs}}
+  \refitem{ref:oh-forum}{OpenHarmony 社区论坛：\url{https://forums.openharmony.cn/}}
+  \refitem{ref:oh-build}{OpenHarmony 编译构建指导：\url{https://gitcode.com/openharmony/docs/blob/weekly_20250414/zh-cn/device-dev/subsystems/subsys-build-all.md}}
+  \refitem{ref:gitee-help}{码云帮助中心：\url{https://help.gitee.com/}}
+  \refitem{ref:oh-memmgr}{OpenHarmony 内存管理指导：\url{https://gitee.com/openharmony/resourceschedule_memmgr}}
+  \refitem{ref:oh-startup}{OpenHarmony 启动子系统介绍：\url{https://gitee.com/openharmony/startup_init_lite}}
+  \refitem{ref:oh-boot-opt}{OpenHarmony 标准系统开机时长优化：\url{https://www.cnblogs.com/openharmony/p/17302295.html}}
+\end{enumerate}
+
+\section{硬件平台与昇腾文档}
+
+\begin{enumerate}[label={\textbf{[\arabic*]}}, leftmargin=4em, labelwidth=2em, labelsep=0.3em, align=left, start=8]
+  \refitem{ref:qizhi01}{启智01开发板用户手册：\url{https://www.bj-jc.com.cn/qizhi01/doc/homepage}}
+  \refitem{ref:ascend}{Ascend 官网：\url{https://www.hiascend.com/}}
+  \refitem{ref:cann-doc}{CANN 开发者文档：\url{https://www.hiascend.com/document}}
+  \refitem{ref:pyacl}{Ascend PyACL 编程指南：\url{https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/82RC1/development/devguide/aclpython/aclpython_07_0001.html}}
+  \refitem{ref:torch-npu}{Torch-NPU 使用指南：\url{https://gitee.com/ascend/pytorch}}
+\end{enumerate}
+
+\section{AI 模型与工具}
+
+\begin{enumerate}[label={\textbf{[\arabic*]}}, leftmargin=4em, labelwidth=2em, labelsep=0.3em, align=left, start=13]
+  \refitem{ref:yolov5}{YOLOv5 项目地址：\url{https://github.com/ultralytics/yolov5}}
+  \refitem{ref:onnx2om}{ONNX 模型转 OM 模型教程：\url{https://blog.csdn.net/qq_40737425/article/details/149403303}}
+  \refitem{ref:cann-download}{CANN 8.2.RC1 下载页面：\url{https://www.hiascend.com/developer/download/community/result?module=cann&cann=8.2.RC1}}
+\end{enumerate}
+
+\section{系统调优参考}
+
+\begin{enumerate}[label={\textbf{[\arabic*]}}, leftmargin=4em, labelwidth=2em, labelsep=0.3em, align=left, start=16]
+  \refitem{ref:linux-vm}{Linux VM 调优指南：\url{https://www.kernel.org/doc/Documentation/sysctl/vm.txt}}
+  \refitem{ref:zram}{ZRAM 性能优化：\url{https://www.kernel.org/doc/Documentation/blockdev/zram.txt}}
+\end{enumerate}
+
+\section{资源下载}
+
+\begin{enumerate}[label={\textbf{[\arabic*]}}, leftmargin=4em, labelwidth=2em, labelsep=0.3em, align=left, start=18]
+  \refitem{ref:npu-driver}{NPU 驱动包（Ascend-hdk-310b-npu-driver-soc）：\url{https://pan.baidu.com/s/1p-qdAfgIWjiZqohhval7ow?pwd=6755}}
+  \refitem{ref:ascend310b-src}{Ascend310B 源码包：\url{https://pan.baidu.com/s/191oiOvTvmKQqhmU0iJesTA?pwd=ys5p}}
+  \refitem{ref:libaarch64}{libaarch64 辅助库：\url{https://pan.baidu.com/s/1MStN-BV0YdoS2XotxhFWFw?pwd=sbr4}}
+  \refitem{ref:cann-pkg}{CANN 工具包：\url{https://pan.baidu.com/s/1AomSfD3pPvQ56-lhn_wDUQ?pwd=aate}}
+  \refitem{ref:app-video}{YOLOv5 图形应用辅助文件：\url{https://pan.baidu.com/s/1mi4vLfgVQ2ZxTFHR244y3Q?pwd=4akz}}
+\end{enumerate}
+
+\section{演示视频}
+
+\begin{enumerate}[label={\textbf{[\arabic*]}}, leftmargin=4em, labelwidth=2em, labelsep=0.3em, align=left, start=18]
+  \refitem{ref:show-video}{详细演示视频：\url{https://pan.baidu.com/s/1_AzzgHXdiHFk_4rkNX40og?pwd=ys6v}}
+\end{enumerate}

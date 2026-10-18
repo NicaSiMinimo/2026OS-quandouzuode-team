@@ -1,0 +1,42 @@
+diff --git a/device/board/ascend/310B/ascendinstall/init.cfg b/device/board/ascend/310B/ascendinstall/init.cfg
+index 063a6ea..309acfa 100644
+--- a/device/board/ascend/310B/ascendinstall/init.cfg
++++ b/device/board/ascend/310B/ascendinstall/init.cfg
+@@ -166,17 +166,6 @@
+                 "mkdir -p /dev/shm/dmp -m 750 && chown -Rf HwDmUser:HwDmUser /dev/shm/dmp",
+                 "chown -Rf HwDmUser:HwDmUser /etc/sys_version.conf",
+                 "export LD_LIBRARY_PATH /libaarch64/aarch64-linux-gnu/:/usr/local/Ascend/driver/lib64/:/usr/lib64",
+-                "sleep 5",
+-                "sleep 5",
+-                "sleep 5",
+-                "cp -rf /var/davinci/cpuset /sys/fs/cgroup/",
+-                "start slogd",
+-                "start sklogd",
+-                "start log-daemon",
+-                "start proc_launcher",
+-                "start iammgr",
+-                "start teecd",
+-                "start tlogcat",
+                 "mkdir /storage/media 0711 root root",
+                 "mkdir /data/misc 01771 system misc",
+                 "mkdir /data/misc/shared_relro 0771 nwebspawn nwebspawn",
+@@ -197,12 +186,13 @@
+                 "restorecon /data/service/el1/public",
+                 "restorecon /data/service/el1/public/activation_lock",
+-                "restorecon /data/service/el1/startup/parameters",
+-                "sleep 5",
+-                "sleep 5",
+-                "sleep 5",
+-                "wait /dev/davinci0 10",
+-                "start dmp_daemon"
++                "restorecon /data/service/el1/startup/parameters"
+             ]
+         }, {
++            "name" : "param:bootevent.boot.completed=true",
++            "condition" : "bootevent.boot.completed=true",
++            "cmds" : [
++                "exec /system/bin/sh /system/var/ascend_post_boot.sh"
++            ]
++        }, {
+             "name" : "boot",
+             "cmds" : [

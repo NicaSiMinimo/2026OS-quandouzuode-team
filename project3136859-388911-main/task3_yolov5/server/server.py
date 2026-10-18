@@ -1,0 +1,357 @@
+#!/usr/bin/env python3.10
+"""
+YOLOv5 识别 HTTP 服务
+运行方式: cd /task3_app/server && python3.10 server.py
+监听地址: http://0.0.0.0:5000
+
+API:
+  POST /start       - 开始识别（图片已在 /task3_app/temp/ 中）
+  GET  /progress    - 查询进度
+  GET  /results     - 获取识别结果列表 [{original, detected}]
+  GET  /output/<f>  - 获取输出文件
+  POST /save        - 保存到 long_term
+"""
+
+import http.server
+import json
+import os
+import subprocess
+import threading
+import re
+import shutil
+
+# ========== 配置 ==========
+TEMP_DIR = '/task3_app/temp/'
+OUTPUT_DIR = '/task3_app/output/'
+LONG_TERM_DIR = '/task3_app/long_term/'
+SERVER_DIR = '/task3_app/server/'
+CANN_ENV = '/cann-install/task2_cann/03_set_cann_env.sh'
+MODEL_PATH = '/cann-install/yolov5_cli/models/yolov5s_ascend310b.om'
+
+# ========== 全局状态 ==========
+progress = {'current': 0, 'total': 0, 'status': 'idle', 'message': ''}
+result_pairs = []  # [{'original': 'filename', 'detected': 'filename'}]
+progress_lock = threading.Lock()
+current_temp_dir = TEMP_DIR  # 当前使用的临时目录，由客户端指定
+
+
+def clean_dir(path):
+    """清空并重建目录"""
+    if os.path.exists(path):
+        shutil.rmtree(path)
+    os.makedirs(path, exist_ok=True)
+
+
+def run_inference(image_dir):
+    """后台线程执行识别，从指定目录读取图片"""
+    global progress, result_pairs, current_temp_dir
+
+    current_temp_dir = image_dir
+
+    # 统计目录下的图片文件
+    image_files = [f for f in os.listdir(current_temp_dir)
+                   if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp'))]
+    total = len(image_files)
+
+    if total == 0:
+        with progress_lock:
+            progress = {'current': 0, 'total': 0, 'status': 'error', 'message': 'temp 目录下没有图片'}
+        return
+
+    with progress_lock:
+        progress = {'current': 0, 'total': total, 'status': 'running', 'message': '准备中...'}
+        result_pairs = []
+
+    # 清空 output（temp 由上传接口管理，不在这里清空）
+    clean_dir(OUTPUT_DIR)
+
+    # 构建命令：始终使用 --input-dir
+    cmd = (
+        f'. {CANN_ENV} && '
+        f'cd {SERVER_DIR} && '
+        f'python3.10 main.py '
+        f'--backend ais_bench '
+        f'--device-id 0 '
+        f'--model {MODEL_PATH} '
+        f'--input-dir {current_temp_dir} '
+        f'--output {OUTPUT_DIR} '
+        f'--img-size 640 --conf-thres 0.25 --iou-thres 0.45 '
+        f'--save-txt '
+        f'--json {os.path.join(OUTPUT_DIR, "result.json")}'
+    )
+
+    print(f'Running: {cmd}')
+
+    # 执行命令
+    proc = subprocess.Popen(
+        cmd, shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        executable='/bin/sh'
+    )
+
+    # 解析 stdout 获取进度
+    for line in iter(proc.stdout.readline, b''):
+        line_str = line.decode('utf-8', errors='ignore').strip()
+        print(line_str)
+        match = re.search(r'\[(\d+)/(\d+)\]', line_str)
+        if match:
+            with progress_lock:
+                progress['current'] = int(match.group(1))
+                progress['total'] = int(match.group(2))
+                progress['message'] = line_str
+
+    proc.wait()
+
+    # 构建结果对（原图 -> 检测图）
+    pairs = []
+    for img_name in image_files:
+        name, ext = os.path.splitext(img_name)
+        detected_name = f'{name}_detected{ext}'
+        detected_path = os.path.join(OUTPUT_DIR, detected_name)
+        if os.path.exists(detected_path):
+            # 复制原图到 output 目录，方便 /output/ 接口统一提供服务
+            original_copy_name = f'original_{name}{ext}'
+            original_src = os.path.join(current_temp_dir, img_name)
+            original_dst = os.path.join(OUTPUT_DIR, original_copy_name)
+            try:
+                shutil.copy2(original_src, original_dst)
+            except OSError as e:
+                print(f'Failed to copy original {img_name}: {e}')
+            pairs.append({
+                'original': original_copy_name,
+                'detected': detected_name
+            })
+
+    with progress_lock:
+        result_pairs = pairs
+        if proc.returncode == 0:
+            progress['status'] = 'done'
+            progress['current'] = total
+            progress['message'] = f'识别完成，共 {len(pairs)} 张'
+        else:
+            progress['status'] = 'error'
+            progress['message'] = f'识别失败，退出码: {proc.returncode}'
+
+    print(f'Recognition finished, exit code: {proc.returncode}')
+
+
+class RequestHandler(http.server.BaseHTTPRequestHandler):
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+
+    def do_POST(self):
+        if self.path == '/start':
+            self.handle_start()
+        elif self.path == '/save':
+            self.handle_save()
+        elif self.path == '/upload':
+            self.handle_upload()
+        elif self.path == '/clean':
+            self.handle_clean()
+        else:
+            self.send_error(404)
+
+    def do_GET(self):
+        if self.path == '/progress':
+            self.handle_progress()
+        elif self.path == '/results':
+            self.handle_results()
+        elif self.path == '/long_term':
+            self.handle_long_term()
+        elif self.path.startswith('/output/'):
+            self.handle_output(self.path[8:])
+        elif self.path.startswith('/long_term_files/'):
+            self.handle_long_term_file(self.path[17:])
+        else:
+            self.send_error(404)
+
+    def handle_clean(self):
+        """清空 temp 和 output 目录，准备新的识别任务"""
+        clean_dir(TEMP_DIR)
+        clean_dir(OUTPUT_DIR)
+        print('Cleaned temp and output directories')
+        self.send_json(200, {'msg': 'cleaned'})
+
+    def handle_upload(self):
+        """接收客户端上传的图片，保存到 temp 目录"""
+        content_type = self.headers.get('Content-Type', '')
+        content_length = int(self.headers.get('Content-Length', 0))
+
+        if content_length == 0:
+            self.send_json(400, {'error': 'no data'})
+            return
+
+        body = self.rfile.read(content_length)
+
+        # 解析 multipart/form-data 获取文件名和数据
+        filename = 'upload.jpg'
+        if 'boundary=' in content_type:
+            boundary = content_type.split('boundary=')[1].encode()
+            # 从 header 中提取 filename
+            header_end = body.find(b'\r\n\r\n')
+            if header_end > 0:
+                header_part = body[:header_end].decode('utf-8', errors='ignore')
+                if 'filename="' in header_part:
+                    filename = header_part.split('filename="')[1].split('"')[0]
+                # 文件数据在 header 之后，boundary 之前
+                file_data = body[header_end + 4:]
+                # 去掉末尾的 boundary
+                boundary_pos = file_data.rfind(b'\r\n--' + boundary)
+                if boundary_pos > 0:
+                    file_data = file_data[:boundary_pos]
+        else:
+            file_data = body
+
+        # 保存到 temp 目录
+        dst_path = os.path.join(TEMP_DIR, filename)
+        with open(dst_path, 'wb') as f:
+            f.write(file_data)
+
+        print(f'Uploaded: {filename} ({len(file_data)} bytes) -> {dst_path}')
+        self.send_json(200, {'msg': 'uploaded', 'filename': filename})
+
+    def handle_start(self):
+        """开始识别（图片已通过 /upload 上传到 temp 目录）"""
+        global progress
+
+        with progress_lock:
+            if progress['status'] == 'running':
+                self.send_json(409, {'error': '识别正在进行中'})
+                return
+
+        thread = threading.Thread(target=run_inference, args=(TEMP_DIR,), daemon=True)
+        thread.start()
+
+        self.send_json(200, {'msg': 'started'})
+
+    def handle_progress(self):
+        """查询进度"""
+        with progress_lock:
+            self.send_json(200, progress)
+
+    def handle_results(self):
+        """获取结果列表"""
+        with progress_lock:
+            self.send_json(200, result_pairs)
+
+    def handle_long_term(self):
+        """获取 long_term 目录下的保存记录"""
+        pairs = []
+        if os.path.exists(LONG_TERM_DIR):
+            files = os.listdir(LONG_TERM_DIR)
+            detected_files = [f for f in files if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp'))
+                              and '_detected' in f]
+            for detected_name in detected_files:
+                name, ext = os.path.splitext(detected_name)
+                # bus_detected.jpg → original_bus.jpg
+                base_name = name.replace('_detected', '')
+                original_name = f'original_{base_name}{ext}'
+                if original_name in files:
+                    pairs.append({
+                        'original': original_name,
+                        'detected': detected_name
+                    })
+        self.send_json(200, pairs)
+
+    def handle_long_term_file(self, filename):
+        """返回 long_term 目录下的文件"""
+        filepath = os.path.join(LONG_TERM_DIR, filename)
+        if not os.path.exists(filepath):
+            self.send_error(404)
+            return
+
+        self.send_response(200)
+        if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp')):
+            self.send_header('Content-Type', 'image/jpeg')
+        else:
+            self.send_header('Content-Type', 'application/octet-stream')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        data = open(filepath, 'rb').read()
+        self.send_header('Content-Length', str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def handle_output(self, filename):
+        """返回输出文件"""
+        filepath = os.path.join(OUTPUT_DIR, filename)
+        if not os.path.exists(filepath):
+            self.send_error(404)
+            return
+
+        self.send_response(200)
+        if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.webp')):
+            self.send_header('Content-Type', 'image/jpeg')
+        else:
+            self.send_header('Content-Type', 'application/octet-stream')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        data = open(filepath, 'rb').read()
+        self.send_header('Content-Length', str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def handle_save(self):
+        """保存到 long_term"""
+        length = int(self.headers.get('Content-Length', 0))
+        body = json.loads(self.rfile.read(length))
+        filename = body.get('filename', '')
+
+        if not filename:
+            self.send_json(400, {'error': '未指定文件名'})
+            return
+
+        os.makedirs(LONG_TERM_DIR, exist_ok=True)
+
+        # 保存检测图
+        src_detected = os.path.join(OUTPUT_DIR, filename)
+        if os.path.exists(src_detected):
+            shutil.copy2(src_detected, os.path.join(LONG_TERM_DIR, filename))
+
+        # 保存对应的原图（通过 result_pairs 查找）
+        with progress_lock:
+            for pair in result_pairs:
+                if pair['detected'] == filename:
+                    original_src = os.path.join(OUTPUT_DIR, pair['original'])
+                    if os.path.exists(original_src):
+                        shutil.copy2(original_src, os.path.join(LONG_TERM_DIR, pair['original']))
+                    break
+
+        self.send_json(200, {'msg': 'saved', 'path': LONG_TERM_DIR})
+
+    def send_json(self, code, obj):
+        data = json.dumps(obj, ensure_ascii=False).encode('utf-8')
+        self.send_response(code)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Content-Length', str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def log_message(self, format, *args):
+        print(f'[{self.log_date_time_string()}] {format % args}')
+
+
+def main():
+    os.makedirs(TEMP_DIR, exist_ok=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(LONG_TERM_DIR, exist_ok=True)
+
+    server = http.server.HTTPServer(('0.0.0.0', 5000), RequestHandler)
+    print('========================================')
+    print('  YOLOv5 识别服务已启动')
+    print('  监听地址: http://0.0.0.0:5000')
+    print(f'  临时目录: {TEMP_DIR}')
+    print(f'  输出目录: {OUTPUT_DIR}')
+    print(f'  长期保存: {LONG_TERM_DIR}')
+    print(f'  main.py:  {SERVER_DIR}main.py')
+    print('========================================')
+    server.serve_forever()
+
+
+if __name__ == '__main__':
+    main()

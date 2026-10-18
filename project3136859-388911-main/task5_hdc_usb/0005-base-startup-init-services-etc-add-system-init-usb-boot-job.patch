@@ -1,0 +1,63 @@
+diff --git a/base/startup/init/services/etc/BUILD.gn b/base/startup/init/services/etc/BUILD.gn
+index bec169e2..0663c883 100755
+--- a/base/startup/init/services/etc/BUILD.gn
++++ b/base/startup/init/services/etc/BUILD.gn
+@@ -124,6 +124,15 @@ if (defined(ohos_lite)) {
+     subsystem_name = "startup"
+   }
+ 
++  # 启智01 板级 USB gadget 开机初始化（system init boot job 一定执行，
++  # vendor 的参数触发 job 开机时不触发，必须由本文件在开机时建出 g1）
++  ohos_prebuilt_etc("init.310B.usb.cfg") {
++    source = "//base/startup/init/services/etc/init.310B.usb.cfg"
++    relative_install_dir = "init"
++    part_name = "init"
++    subsystem_name = "startup"
++  }
++
+   ohos_prebuilt_para("ohos.para") {
+     source = "//base/startup/init/services/etc/param/ohos.para"
+     install_images = [
+@@ -246,6 +255,7 @@ if (defined(ohos_lite)) {
+       ":console.cfg",
+       ":features.json",
+       ":group",
++      ":init.310B.usb.cfg",
+       ":init.cfg",
+       ":init.reboot",
+       ":init.usb.cfg",
+diff --git a/base/startup/init/services/etc/init.310B.usb.cfg b/base/startup/init/services/etc/init.310B.usb.cfg
+new file mode 100644
+--- /dev/null
++++ b/base/startup/init/services/etc/init.310B.usb.cfg
++{
++    "jobs" : [{
++            "name" : "boot",
++            "cmds" : [
++                "stop hdcd",
++                "mkdir /dev/usb-ffs 0770 shell shell",
++                "mkdir /dev/usb-ffs/hdc 0770 shell shell",
++                "mkdir /config/usb_gadget/g1",
++                "mkdir /config/usb_gadget/g1/strings/0x409 0770",
++                "mkdir /config/usb_gadget/g1/functions/ffs.hdc",
++                "mkdir /config/usb_gadget/g1/configs/b.1 0770 shell shell",
++                "mkdir /config/usb_gadget/g1/configs/b.1/strings/0x409 0770 shell shell",
++                "write /config/usb_gadget/g1/idVendor 0x2207",
++                "write /config/usb_gadget/g1/idProduct 0x5000",
++                "write /config/usb_gadget/g1/os_desc/use 1",
++                "write /config/usb_gadget/g1/bcdDevice 0x0223",
++                "write /config/usb_gadget/g1/bcdUSB 0x0300",
++                "copy /sys/block/mmcblk1/device/cid /config/usb_gadget/g1/strings/0x409/serialnumber",
++                "write /config/usb_gadget/g1/strings/0x409/manufacturer Hisilicon",
++                "write /config/usb_gadget/g1/strings/0x409/product \"HDC Device\"",
++                "write /config/usb_gadget/g1/os_desc/b_vendor_code 0x1",
++                "write /config/usb_gadget/g1/os_desc/qw_sign MSFT100",
++                "write /config/usb_gadget/g1/configs/b.1/MaxPower 500",
++                "symlink /config/usb_gadget/g1/configs/b.1 /config/usb_gadget/g1/os_desc/b.1",
++                "mount functionfs hdc /dev/usb-ffs/hdc uid=2000,gid=2000",
++                "sleep 1",
++                "start hdcd"
++            ]
++        }
++    ]
++}

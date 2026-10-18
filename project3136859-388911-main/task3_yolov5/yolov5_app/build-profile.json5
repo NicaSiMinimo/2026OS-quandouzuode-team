@@ -1,0 +1,56 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "material": {
+          "certpath": "C:/Users/Yang/.ohos/config/openharmony/default_yolov5_app_0l5KtHy6drnbxb9EGOkpEs9MXqApZ6Oe0zrW6YbKSS0=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001BCC28D2E329DAE7643A37E7495FDBD2C8BEEF8B0F83AEBBFD1CAB7FE68FCDBCFE764F33410EA667",
+          "profile": "C:/Users/Yang/.ohos/config/openharmony/default_yolov5_app_0l5KtHy6drnbxb9EGOkpEs9MXqApZ6Oe0zrW6YbKSS0=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:/Users/Yang/.ohos/config/openharmony/default_yolov5_app_0l5KtHy6drnbxb9EGOkpEs9MXqApZ6Oe0zrW6YbKSS0=.p12",
+          "storePassword": "0000001B9EE024B35F7C951CDBD8E7F069DC9529933C656AB8E2D95C2A93F74E3A96932F8872816B8721BD"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "targetSdkVersion": 11,
+        "compatibleSdkVersion": 11,
+        "compileSdkVersion": 11,
+        "runtimeOS": "OpenHarmony",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": false
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug",
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}

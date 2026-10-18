@@ -1,0 +1,60 @@
+diff --git a/device/board/ascend/310B/ascendinstall/ascend_post_boot.sh b/device/board/ascend/310B/ascendinstall/ascend_post_boot.sh
+new file mode 100644
+index 0000000..2b9d7d7
+--- /dev/null
++++ b/device/board/ascend/310B/ascendinstall/ascend_post_boot.sh
+@@ -0,0 +1,54 @@
++#!/system/bin/sh
++
++export PATH=/system/bin:/bin:/usr/bin:/usr/sbin:/sbin
++export LD_LIBRARY_PATH=/libaarch64/aarch64-linux-gnu/:/usr/local/Ascend/driver/lib64/:/usr/lib64
++
++LOG_FILE=/var/log/ascend_post_boot.log
++CPUSET_SRC=/var/davinci/cpuset
++CPUSET_DST=/sys/fs/cgroup/
++SERVICES="slogd sklogd log-daemon proc_launcher iammgr teecd tlogcat dmp_daemon"
++
++mkdir -p /var/log
++
++log()
++{
++    echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "${LOG_FILE}"
++}
++
++log "ascend post boot start"
++
++wait_count=0
++while [ "${wait_count}" -lt 10 ]; do
++    if [ -d "${CPUSET_SRC}" ]; then
++        cp -rf "${CPUSET_SRC}" "${CPUSET_DST}" >> "${LOG_FILE}" 2>&1
++        log "copied ${CPUSET_SRC} to ${CPUSET_DST}"
++        break
++    fi
++    wait_count=$((wait_count + 1))
++    sleep 1
++done
++
++if [ ! -d "${CPUSET_SRC}" ]; then
++    log "${CPUSET_SRC} not found, continue without copying cpuset"
++fi
++
++wait_count=0
++while [ "${wait_count}" -lt 10 ] && [ ! -e /dev/davinci0 ]; do
++    wait_count=$((wait_count + 1))
++    sleep 1
++done
++
++if [ ! -e /dev/davinci0 ]; then
++    log "/dev/davinci0 not found, services will still be started"
++fi
++
++for service in ${SERVICES}; do
++    log "start ${service}"
++    service_control start "${service}" >> "${LOG_FILE}" 2>&1
++    ret=$?
++    if [ "${ret}" -ne 0 ]; then
++        log "start ${service} failed: ${ret}"
++    fi
++done
++
++log "ascend post boot finish"

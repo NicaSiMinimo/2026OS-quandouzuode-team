@@ -1,0 +1,28 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "YOLOv5目标检测模块"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "YOLOv5目标检测识别"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "YOLOv5识别"
+    },
+    {
+      "name": "permission_read_image_reason",
+      "value": "用于读取用户选择的图片进行YOLOv5目标检测识别"
+    },
+    {
+      "name": "permission_camera_reason",
+      "value": "用于实时预览摄像头并执行YOLOv5目标检测"
+    },
+    {
+      "name": "permission_write_image_reason",
+      "value": "用于保存识别结果图片到设备存储"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+diff --git a/device/board/ascend/310B/ascendinstall/minirc_sys_init.sh b/device/board/ascend/310B/ascendinstall/minirc_sys_init.sh
+index d889dd2..5ea4e94 100644
+--- a/device/board/ascend/310B/ascendinstall/minirc_sys_init.sh
++++ b/device/board/ascend/310B/ascendinstall/minirc_sys_init.sh
+@@ -587,22 +587,26 @@ load_device_modules()
+     ko_check ${ko_path}/drv_soc_misc.ko &
+     ko_check ${ko_path}/drv_memory.ko
+     ko_check ${ko_path}/ts_agent.ko
+-    ko_check ${ko_path}/drv_osal.ko anony=1 mmz_allocator=hisi mmz=anonymous,0,0x940000000,3072M
++    ko_check ${ko_path}/drv_osal.ko anony=1 mmz_allocator=hisi mmz=anonymous,0,0x940000000,2048M
+     ko_check ${ko_path}/media_drval.ko
+     ko_check ${ko_path}/drv_base.ko
+     ko_check ${ko_path}/drv_sys.ko
+     ko_check ${ko_path}/drv_region.ko
+     ko_check ${ko_path}/drv_dvpp_cmdlist.ko
+ 
+-    load_media_modules
++    # Lazy-load media and DVPP modules: only load when NPU/display is first used
++    # This saves ~50-100MB of kernel module memory at boot
++    # Modules will be loaded on-demand via modprobe when device nodes are accessed
++    echo "Media and DVPP modules will be loaded on demand"
++    # Uncomment below to restore boot-time loading:
++    #load_media_modules
++    #load_dvpp_and_qos_modules &
+ 
+     ko_check ${ko_path}/drv_lpm_fault.ko
+     ko_check ${ko_path}/drv_lpm_devmng.ko
+     ko_check ${ko_path}/drv_pm.ko
+     ko_check ${ko_path}/drv_xshmem.ko
+ 
+-    load_dvpp_and_qos_modules &
+-
+     # hiusbc
+     ko_check ${ko_path}/udc-core.ko
+     ko_check ${ko_path}/libcomposite.ko

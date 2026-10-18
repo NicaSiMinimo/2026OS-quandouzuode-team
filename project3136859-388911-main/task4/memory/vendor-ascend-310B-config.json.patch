@@ -1,0 +1,51 @@
+--- a/vendor/ascend/310B/config.json
++++ b/vendor/ascend/310B/config.json
+@@ -129,8 +129,8 @@
+       ]
+     },
+     {
+-    "subsystem": "ai",
+-    "components": [
++      "subsystem": "ai",
++      "components": [
+         {
+           "component": "mindspore",
+           "features": []
+@@ -138,17 +138,6 @@
+       ]
+     },
+     {
+-      "subsystem": "msdp",
+-      "components": [
+-        {
+-          "component": "device_status",
+-          "features": [
+-            "device_status_interaction_coordination = false"
+-          ]
+-        }
+-      ]
+-    },
+-    {
+       "subsystem": "communication",
+       "components": [
+         {
+@@ -175,19 +164,6 @@
+         }
+       ]
+     },
+-    {
+-      "subsystem": "castplus",
+-      "components": [
+-        {
+-          "component": "sharing_framework",
+-          "features": []
+-        },
+-        {
+-          "component": "cast_engine",
+-          "features": []
+-        }
+-      ]
+-    },
+     {
+       "subsystem": "thirdparty",
+       "components": [

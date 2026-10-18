@@ -1,0 +1,20 @@
+--- ./foundation/multimedia/image_effect/frameworks/native/render_environment/graphic/gl_utils.cpp
++++ ./foundation/multimedia/image_effect/frameworks/native/render_environment/graphic/gl_utils.cpp
+@@ -31,6 +31,10 @@
+ namespace OHOS {
+ namespace Media {
+ namespace Effect {
++static auto glEGLImageTargetTexture2DOES = reinterpret_cast<PFNGLEGLIMAGETARGETTEXTURE2DOESPROC>(
++        eglGetProcAddress("glEGLImageTargetTexture2DOES"));
++static auto eglCreateImageKHR = reinterpret_cast<PFNEGLCREATEIMAGEKHRPROC>(
++        eglGetProcAddress("eglCreateImageKHR"));
+ constexpr const int MSG_SIZE = 512;
+ constexpr const int BYTES_OF_RGBA16F = 8;
+ constexpr const int BYTES_OF_R32F = 4;
+@@ -237,4 +241,4 @@
+ }
+ } // namespace Effect
+ } // namespace Media
+-} // namespace OHOS
+\ 文件末尾没有换行符
++} // namespace OHOS

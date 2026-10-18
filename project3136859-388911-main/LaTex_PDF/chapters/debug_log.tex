@@ -1,0 +1,597 @@
+% !TeX root = ../main.tex
+
+\chapter{系统源码二次排查与集成修复记录}
+
+\section{背景与目标}
+
+启智01 开发板（昇腾 310B，OpenHarmony 5.0.3.140，内核 5.10.0+）存在
+``HDMI 只有画面、没有声音''的问题。要在不改动已完成的业务页面前提下，
+通过系统源码排查与最小补丁修复 HDMI 音频声卡缺失，并完成整机编译验证。
+
+本次记录聚焦于两条主线：
+\begin{itemize}
+  \item HDMI 音频声卡不出现在 ALSA 层（\texttt{aplay -l} 无 Playback PCM）的根因定位；
+  \item 源码修改后镜像不生效、编译无法通过的构建链路问题修复。
+\end{itemize}
+
+\section{关键结论}
+
+\subsection{drv\_hdmi 的形态与来源}
+
+当前源码/镜像中没有独立的 \texttt{drv\_hdmi.ko}，但 HDMI 驱动功能并未缺失：
+\begin{itemize}
+  \item 内核源码中存在 \texttt{drv\_hdmi\_*.c}（\texttt{Ascend310B-source/driver/ace/media/dss/vdp/mkp/}），
+  其 \texttt{obj-m += drv\_hdmi.o} 目标未被产品构建单独打包；
+  \item 通过 \texttt{nm} 检查确认，\texttt{drv\_hdmi\_*} 符号（含
+  \texttt{drv\_hdmi\_audio\_infoframe\_send}、\texttt{drv\_hdmi\_audio\_path\_enable}、
+  \texttt{drv\_hdmi\_edid\_*} 等）已编译进 \texttt{ascend\_vdp\_drm.ko}
+  （atlas-200a2 DRM 驱动）；
+  \item 外部 Ascend 驱动包
+  \texttt{Ascend-hdk-310b-npu-driver-soc\_24.1.rc2\_linux-aarch64.run} 中
+  确实包含独立 \texttt{drv\_hdmi.ko}（524512 字节）以及 \texttt{drv\_acodec}、
+  \texttt{drv\_aio}、\texttt{drv\_ao}、\texttt{drv\_ai}、\texttt{drv\_adec}、
+  \texttt{drv\_aenc} 等 Davinci 音频设备驱动；
+  \item 但外部包中\textbf{没有} ALSA/ASoC 声卡模块。真正提供
+  \texttt{aplay -l} 声卡的是板级预编译的
+  \texttt{ascend\_310b\_machine.ko}、\texttt{ascend\_310b\_codec.ko}、
+  \texttt{ascend\_310b\_platform\_m.ko}，这三个模块已通过
+  \texttt{kernel\_driver/BUILD.gn} 打包进镜像 \texttt{/var/davinci/driver/}。
+\end{itemize}
+
+此外需要注意：外部包中的 \texttt{drv\_hdmi.ko} 与板级
+\texttt{ascend\_vdp\_drm.ko} 内嵌的 drv\_hdmi 符号重叠，两者不能同时
+\texttt{insmod}；上板验证时应使用镜像内的集成版（推荐），不要额外加载
+外部包中的独立模块。
+
+\subsection{根因一：设备树 compatible 大小写不匹配}
+
+旧版 dtb（2026-08-10 构建）中 \texttt{sound} 与 \texttt{ascend310b\_codec}
+节点的 compatible 为
+\texttt{"Ascend,310b-audio-machine"}、\texttt{"Ascend,310b-audio-codec"}（大写 A），
+而驱动模块的 \texttt{of\_match\_table} 为
+\texttt{"ascend,310b-audio-machine"}、\texttt{"ascend,310b-audio-codec"}（小写）。
+Linux 的 compatible 匹配区分大小写，因此 machine/codec 驱动永远无法 probe，
+\texttt{/proc/asound/cards} 不会出现 \texttt{ascend310b} 声卡；
+\texttt{platform} 两端均为大写 \texttt{"Ascend,310b-audio-platform"}，可正常绑定。
+
+修复方式：内核 dtb 补丁 \texttt{0005-add-audio-device.patch} 将
+\texttt{hi1910B-audio.dtsi} 中 machine/codec 的 compatible 改为小写，
+与预编译驱动一致；platform 保持大写不变。
+
+\subsection{根因二：修改 dtsi 后内核动作被 ninja 跳过}
+
+\texttt{device/board/ascend/310B/kernel/BUILD.gn} 中 \texttt{action("kernel")}
+声明的输入仅为 \texttt{//kernel/linux/linux-5.10}（stock 内核目录），
+输出为 \texttt{out/kernel/src\_tmp/linux-5.10/boot\_linux}；
+而实际参与编译的 \texttt{hi1910B-audio.dtsi} 位于
+\texttt{kernel/linux/Ascend310B-5.10/Ascend310B-source/}，未被声明为依赖。
+
+后果：输出戳（8-10 12:09）比声明的输入目录（8-07）新，ninja 判定内核动作
+``最新''而跳过；即使修改 dtsi，\texttt{dt.img}、\texttt{boot\_linux.img}、
+\texttt{Image\_signed} 也不会重新生成，反复执行 \texttt{./build.sh} 均无效。
+
+修复方式：在 \texttt{BUILD.gn} 的 \texttt{sources} 中显式加入
+\texttt{hi1910B-audio.dtsi} 与 \texttt{0005-add-audio-device.patch} 两个文件，
+使 ninja 感知 DT 源码变化并重跑内核动作。
+
+\subsection{根因三：内核交叉编译工具链不在 PATH}
+
+内核 defconfig 阶段需要 \texttt{aarch64-target-linux-gnu-gcc}，该编译器位于
+\texttt{/opt/compiler/toolchain/bin/}（Do-Compiler 7.3.0）。直接执行
+\texttt{./build.sh} 时 PATH 未包含该目录，报
+\texttt{compiler 'aarch64-target-linux-gnu-gcc' not found}。
+
+修复方式：在 \texttt{build/build\_scripts/build.sh} 开头加入
+\texttt{export PATH=/opt/compiler/toolchain/bin:\$PATH} 并
+\texttt{source /etc/profile}（与官方 \texttt{ascend\_env.sh/build.sh} 一致），
+使每次构建自动带上交叉编译工具链。
+
+\section{验证证据}
+
+\subsection{产物时间戳}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{产物} & \textbf{旧状态} & \textbf{修复后状态} \\
+\hline
+\texttt{dt.img} & 2026-08-10 12:09（大写 compatible） & 2026-08-11 22:45（小写 compatible） \\
+\hline
+\texttt{hi1910B-asic-M275-B25.dtb} & 2026-08-10 12:09 & 2026-08-11 22:45 \\
+\hline
+\texttt{boot\_linux.img / Image\_signed} & 2026-08-10 12:17 & 2026-08-11 22:53 \\
+\hline
+\texttt{system.img / vendor.img} & 2026-08-11 21:59 & 2026-08-11 23:19 \\
+\hline
+\end{tabular}
+\caption{构建产物时间戳对比}
+\label{tab:timestamp}
+\end{table}
+
+整编已于 2026-08-11 23:19 完成（\texttt{build.log} 正常收尾，
+\texttt{error.log} 无新增错误），上述产物均为最终重新生成的结果。
+
+\subsection{新版 dtb 反编译结果}
+
+启智01 实际型号 \texttt{DBJJC-QiZhi01-20T} 对应
+\texttt{hi1910B-asic-M275-B25.dtb}，2026-08-11 22:45 重新生成后，
+设备树 \texttt{sound} 节点内容为：
+
+\begin{lstlisting}[style=shell]
+sound {
+        compatible = "ascend,310b-audio-machine";
+        ascend310b,platform = <0x33>;
+        ascend310b,audio-codec = <0x34>;
+};
+ascend310b_codec {
+        compatible = "ascend,310b-audio-codec";
+};
+ascend310b_platform {
+        compatible = "Ascend,310b-audio-platform";
+};
+\end{lstlisting}
+
+与三个驱动模块的 \texttt{of\_match\_table} 完全一致，绑定条件满足。
+
+\subsection{关键排查命令}
+
+\begin{lstlisting}[style=shell]
+# 1) 确认 drv_hdmi 符号已编入 ascend_vdp_drm.ko
+nm ascend_vdp_drm.ko | grep drv_hdmi
+
+# 2) 确认驱动模块 of_match 期望的 compatible 大小写
+strings ascend_310b_machine.ko | grep 310b-audio
+modinfo ascend_310b_platform_m.ko | grep alias
+
+# 3) 解列外部 Ascend 驱动包，确认是否提供 drv_hdmi.ko
+bash Ascend-hdk-310b-npu-driver-soc_24.1.rc2_linux-aarch64.run --list | grep -i hdmi
+
+# 4) 反编译板级 dtb，核对 sound 节点 compatible 大小写
+dtc -I dtb -O dts hi1910B-asic-M275-B25.dtb | grep -A5 'sound {'
+\end{lstlisting}
+
+\section{已落地的修改}
+
+\begin{enumerate}
+  \item \texttt{kernel/linux/Ascend310B-5.10/Ascend310B-source/dtb/dts/hi1910b/hi1910BL/product/hi1910B-audio.dtsi}
+  （由补丁 \texttt{0005-add-audio-device.patch} 应用）：
+  machine/codec compatible 改为小写；
+  \item \texttt{device/board/ascend/310B/kernel/BUILD.gn}：
+  kernel action 的 \texttt{sources} 增加 dtsi 与 0005 补丁，解决
+  ninja 跳过内核重建的问题；
+  \item \texttt{build/build\_scripts/build.sh}：
+  开头导出交叉工具链 PATH 并 \texttt{source /etc/profile}；
+  \item \texttt{scripts/hdmi\_audio\_board\_check.sh}（本工程）：
+  新增板端 HDMI 音频验证脚本，自动检查 ALSA 声卡、模块加载、
+  设备树 sound 节点、驱动绑定、内核日志与 HDMI 链路。
+\end{enumerate}
+
+\section{遇到的问题与排查过程}
+
+\subsection{镜像中没有 drv\_hdmi.ko 的疑问}
+
+委托答复中曾标注 ``当前源码/镜像中没有 drv\_hdmi.ko，HDMI 声卡仍需确认
+外部 Ascend 驱动包是否提供''。排查确认：
+\begin{itemize}
+  \item 镜像 \texttt{/var/davinci/driver/} 与内核构建产物中确实没有
+  \texttt{drv\_hdmi.ko}；
+  \item 但 \texttt{drv\_hdmi} 功能已编入 \texttt{ascend\_vdp\_drm.ko}；
+  \item 外部驱动包（\texttt{.run}）经 \texttt{--list} 解列确认
+  包含独立 \texttt{drv\_hdmi.ko}，但无 ASoC 声卡模块；
+  \item 因此 ``外部包是否提供'' 已有答案：提供 HDMI 底层驱动，
+  不提供 ALSA 声卡；声卡由板级三件套提供。
+\end{itemize}
+
+\subsection{为什么改完源码再编译还是无效}
+
+按常规执行 \texttt{./build.sh} 后，\texttt{dt.img} 时间戳未变化。
+通过 \texttt{out/310B/.ninja\_log} 与 \texttt{build.ninja} 分析发现
+kernel action 的输入声明错误，ninja 每次跳过内核动作。
+修复 \texttt{BUILD.gn} 后再次构建，内核动作正常重跑，
+\texttt{dt.img} 与板级 dtb 均重新生成。
+
+\subsection{内核 defconfig 编译失败}
+
+重跑内核后出现 \texttt{compiler 'aarch64-target-linux-gnu-gcc' not found}。
+定位为构建环境 PATH 缺少 \texttt{/opt/compiler/toolchain/bin}；
+在 \texttt{build.sh} 内固化工具链环境后解决。
+
+\section{HDC USB Gadget 启动修复记录}
+
+\subsection{问题发现}
+
+新镜像刷机后，Windows 电脑通过 USB 连接板子，
+\texttt{hdc list targets} 为空，\texttt{hdc shell} 不可用。
+板端现象：
+\begin{itemize}
+  \item \texttt{/dev/usb-ffs/hdc} 目录为空；
+  \item \texttt{/config/usb\_gadget/g1} 不存在，UDC not attached；
+  \item \texttt{sys.usb.ffs.ready=0}；
+  \item Windows 设备管理器枚举不到 \texttt{VID\_2207 \& PID\_5000}。
+\end{itemize}
+
+\subsection{排查思路}
+
+\begin{enumerate}
+  \item 先排除 Windows 侧：hdc 工具版本、USB 驱动、数据线/端口均正常；
+  \item 转入板端检查 USB gadget：确认 g1 未创建，问题在 init 启动链路；
+  \item 对比两个 init cfg：\texttt{init.310B.usb.cfg} 负责挂载 configfs
+  并创建 g1，\texttt{init.usb.configfs.cfg} 的 boot job 直接创建
+  \texttt{g1/functions/...}，假设 g1 已存在；
+  \item 确认新刷镜像的 userdata 丢失了 \texttt{persist.hdc.control}，
+  hdcd 控制参数未恢复；
+  \item 结论：boot job 未成功建出 g1，两个 cfg 存在执行顺序/依赖问题，
+  导致 ffs.hdc 与 UDC 绑定全部失效；
+  \item 进一步确认 \texttt{chip\_prod} 分区从未被使用：
+  烧录脚本 \texttt{formatSD310B.sh} 不刷 chip\_prod.img、
+  SD 分区表没有 chip\_prod 分区、\texttt{fstab.310B} 没有挂载项，
+  因此 \texttt{hardware\_310B.para} 的默认参数从未生效，
+  刷完 userdata 后 \texttt{persist.hdc.control} 必然丢失。
+\end{enumerate}
+
+\subsection{解决过程}
+
+\textbf{临时修复（当前已刷板子）：}
+\begin{lstlisting}[style=shell]
+mount -o remount,rw /vendor
+# 修改 /vendor/etc/init/init.310B.usb.cfg 与 init.usb.configfs.cfg
+mount -o remount,ro /vendor
+setparam persist.hdc.control true
+reboot
+\end{lstlisting}
+
+\textbf{永久修复（源码补丁）：}
+\begin{enumerate}
+  \item \texttt{dtb/dts/.../hi1910B-asic-M275-B25.dts}（内核 cmdline）：
+  bootargs 增加
+  \texttt{ohos.required\_mount.chip\_prod=/dev/block/mmcblk1p3@/chip\_prod@ext4@ro,barrier=1@wait,required}。
+  init 的 required mount 只解析 cmdline 的 \texttt{ohos.required\_mount.*}
+  （\texttt{LoadFstabFromCommandLine}），不读 \texttt{fstab.310B}，
+  因此必须在 dts bootargs 中声明；
+  \item \texttt{init.usb.configfs.cfg}：boot job 第一条增加
+  \texttt{mkdir /config/usb\_gadget/g1} 作为幂等兜底；
+  \item \textbf{板端实测修正（补充委托）}：vendor cfg 的 boot job
+  \textbf{开机时不执行}，真正执行的是
+  \texttt{param:sys.usb.config=hdc \&\& param:sys.usb.configfs=1}
+  参数触发 job（hdcd 也由它启动）。因此完整 gadget 初始化
+  （建 /dev/usb-ffs/hdc、g1、strings、ffs.hdc、configs/b.1，
+  写 VID 0x2207/PID 0x5000/bcdDevice/bcdUSB/描述符，
+  挂 functionfs，设 sys.usb.configfs/controller，start hdcd）
+  已放入该参数触发 job；
+  \item \textbf{第二次实测修正（source\_code\_changes\_required）}：
+  初版参数触发 job 出现两个新问题——job 内部
+  \texttt{setparam sys.usb.configfs 1} 反复触发自身，导致
+  \texttt{Failed to mount for /dev/usb-ffs/hdc, err 16} 出现 73 次；
+  且 hdcd 在 functionfs 挂载前已启动，只有 ep0 没有 ep1/ep2。
+  最终方案：job 开头 \texttt{stop hdcd}；删除
+  \texttt{setparam sys.usb.configfs 1} 与
+  \texttt{setparam sys.usb.controller}（系统已提供）；
+  挂载 functionfs 后 \texttt{sleep 1} 再 \texttt{start hdcd}；
+  \item \textbf{V1.11 最终源码复核}：310B 产品已有
+  \texttt{device/board/ascend/310B/cfg/init.310B.usb.cfg}，其
+  \texttt{BUILD.gn} 已将文件打包到 vendor，且
+  \texttt{init.310B.cfg} 已显式 import 该文件。曾提出的
+  \texttt{base/startup/init/services/etc/init.310B.usb.cfg} 会形成第二个
+  gadget 初始化 job，存在重复挂载、重复绑定和 hdcd 启动竞争，因此最终源码
+  \textbf{没有应用}该重复 system init 方案；
+  \item \texttt{init.310B.usb.cfg} 保持完整职责：init 内建 \texttt{mkdir}
+  不支持 \texttt{-p}（\texttt{DoMkDir} 参数个数仅接受 1/2/4，
+  \texttt{-p} 会被当作路径），但普通 \texttt{mkdir} 对 EEXIST 容错，
+  本身幂等；且 \texttt{mount configfs} 全树仅此一处，
+  挂载与 g1 创建本就在同一个 boot job 内；
+  \item \texttt{hardware\_310B.para}：写入
+  \texttt{persist.hdc.control = "true"} 与
+  \texttt{persist.hdc.mode.usb = "enable"}、
+  \texttt{persist.hdc.mode.tcp = "disable"}
+  （参数解析器支持空格与引号），随 chip\_prod 镜像发布；
+  \item \texttt{formatSD310B.sh}（烧录工具）：新增将
+  \texttt{chip\_prod.img} 写入 p3 分区，使分区真正可挂载。
+\end{enumerate}
+
+补丁资料整理在工程 \texttt{task5\_hdc\_usb/}。最终有效方案为 0001
+（dts cmdline）、0002（现有 vendor USB cfg 的幂等与顺序修复）、0003
+（默认参数）和 0004（烧录脚本）。早期资料中的 0005 重复 system init boot
+job 已由 V1.11 源码复核判定为冗余，\textbf{不得再应用}；当前 5.0.3 源码只保留
+产品原有且已进入构建图的 vendor \texttt{init.310B.usb.cfg}。
+
+\subsection{验收标准}
+
+\begin{lstlisting}[style=shell]
+ls -d /config/usb_gadget/g1
+cat /config/usb_gadget/g1/UDC          # a5080000.hiusbc1
+param get sys.usb.ffs.ready            # 1
+param get persist.hdc.control          # true
+param get persist.hdc.mode.usb         # enable
+mount | grep chip_prod                 # /dev/.../p3 on /chip_prod
+\end{lstlisting}
+
+Windows 侧 \texttt{hdc list targets} 能列出设备，\texttt{hdc shell}
+可进入，且重启后不丢失。
+
+\section{开机黑屏（显示管线提交失败）排查记录}
+
+\subsection{实机结论}
+
+- 电源状态为 AWAKE，屏幕超时已调长；
+- HDMI-B 已连接、enabled、有 1920x1080 framebuffer；
+- 真正失败点：\texttt{composer\_host} 每秒执行
+  \texttt{drmModeAtomicCommit failed -22 errno 22}
+  （\texttt{Apply:309} / \texttt{Commit:42}），内核拒绝提交，
+  两个 HDMI 口均黑屏；
+- render\_service 开机 watchdog：
+  \texttt{thread(RenderService) blocked 5s}，
+  主链在 \texttt{/vendor/lib64/chipsetsdk/libEGL.so}；
+- 强制 \texttt{HDMI-A on / HDMI-B off} 后 composer 仍向 HDMI-B 提交，
+  仍报 -22。
+
+\subsection{根因}
+
+本次镜像中 kernel DRM 驱动、vendor DISP/HDI、\texttt{composer\_host}、
+\texttt{libEGL} 的组合不兼容。composer\_host 提交了内核不支持的
+plane property，例如：
+
+\begin{lstlisting}[style=shell]
+SetLayerVisibleRegion <private> is not supported
+SetLayerColor <private> is not supported
+SetLayerMaskInfo <private> is not supported
+SetDisplayClientDamage <private> is not supported
+\end{lstlisting}
+
+当前 DRM 设备：\texttt{atlas-200a2 dev=401000000.drm}
+
+当前显示布局：
+
+\begin{lstlisting}[style=shell]
+plane[31]: PRIMARY0 -> 无 fb
+plane[32]: PRIMARY1 -> crtc-1 -> HDMI-B-1, fb 1920x1080
+crtc-0 -> HDMI-A-1 active
+crtc-1 -> HDMI-B-1 active
+\end{lstlisting}
+
+\subsection{V1.11 源码修复}
+
+最终修改位于 310B 产品实际使用的
+\texttt{device/soc/ascend/310B/hardware/display/src/display\_device/}，
+不再依赖 HDMI 名称、connector 枚举顺序或固定 sysfs 路径：
+
+\begin{enumerate}
+  \item 删除“没有 1080p 时手工构造 148500 kHz、1920x1080 模式并覆盖
+  mode 0”的逻辑，只接受 DRM 内核返回且时序字段有效的 mode；
+  \item 优先选择 \texttt{DRM\_MODE\_TYPE\_PREFERRED}，没有 preferred
+  标记时才回退到第一个真实内核 mode；
+  \item 通过 \texttt{drmModeObjectGetProperties} 与
+  \texttt{drmModeGetPropertyBlob} 读取 EDID，校验长度、128 字节对齐、
+  EDID 文件头、扩展块数量以及每个块的 checksum；
+  \item HDMI connector 只有同时满足 connected、存在可用 mode、EDID 有效
+  才发布为有效物理显示，过滤“connected 但 EDID 全零”的虚假连接器；
+  \item 修复 encoder 的 \texttt{possible\_crtcs} 等值判断为位掩码判断，
+  并让 discovery、atomic hotplug 与后续合成始终使用同一个 CRTC；
+  \item 热插拔时重新读取 connector/EDID/modes，按同一 CRTC 执行
+  bind/unbind；无效状态直接拒绝提交，不再制造模式掩盖错误；
+  \item connector、property、EDID blob、atomic request、mode blob 和 DRM
+  resources 均在全部退出路径释放，消除热插拔过程中的对象泄漏。
+\end{enumerate}
+
+以上修改把原来的“按 connector 名称猜主屏”改为“按 DRM 真实连接状态、有效
+EDID、内核模式和 encoder/CRTC 能力选择”，同时关闭了导致
+\texttt{drmModeAtomicCommit(-22)} 的跨 CRTC 错配路径。
+
+\subsection{显示验收}
+
+\begin{lstlisting}[style=shell]
+power-shell dump -s
+# 期望 Current State: AWAKE
+cat /sys/kernel/debug/dri/0/state
+# 期望主输出口对应 plane 有 fb，而不是 fb=0
+hilog -x | grep -iE "drmModeAtomicCommit|Apply:309|Commit:42"
+# 期望不再出现 failed -22
+\end{lstlisting}
+
+\section{V1.11 HDMI 音频全链路补充}
+
+除前述 DT compatible 修复外，V1.11 还完成了 HDMI 音频从内核模块到
+OpenHarmony 音频策略的完整接线：
+
+\begin{enumerate}
+  \item \texttt{kernel\_driver/BUILD.gn} 通过构建 action 对预编译
+  \texttt{ascend\_vdp\_drm.ko} 应用音频补丁，输出文件固定命名为
+  \texttt{ascend\_vdp\_drm.ko}，与安装清单和
+  \texttt{minirc\_sys\_init.sh} 的加载名保持一致；
+  \item 启动脚本在 \texttt{svm}、\texttt{drv\_osal}、\texttt{drv\_base}
+  之后同步加载 \texttt{ascend\_310b\_codec.ko}、
+  \texttt{ascend\_310b\_platform\_m.ko} 和
+  \texttt{ascend\_310b\_machine.ko}。HDMI 控制器使用
+  \texttt{ascend\_vdp\_drm.ko} 内嵌实现，不再错误加载不存在或符号冲突的
+  独立 \texttt{drv\_hdmi.ko}；
+  \item ALSA adapter 优先按配置中的稳定声卡名 \texttt{ascend310b}
+  匹配，仅对未配置名称的旧配置保留数字 card id 回退，避免 C270 USB Audio
+  抢占 card 0 后把主输出选到摄像头声卡；
+  \item 修复声卡配置解析对短字符串固定读取 63 字节的问题，使用
+  \texttt{strncpy\_s} 完成有界复制；
+  \item 主输出策略统一为 48kHz、S16LE、双声道，20ms buffer 对应
+  \texttt{bufferSize=3840}；
+  \item mixer 初始化显式指定 \texttt{-c ascend310b}，设置 Playback
+  unmute/100\% 和 \texttt{Deviceid=3}；初始化放入后台执行，并保留低频 HDMI
+  热插拔监控，在重新连接后恢复路由和音量。
+\end{enumerate}
+
+该方案同时解决了“声卡没有 probe”“USB 声卡编号漂移”“策略层仍按单声道输出”
+和“热插拔后 mixer 状态丢失”四类问题，且没有把外部厂商驱动包中的独立
+\texttt{drv\_hdmi.ko} 与镜像内集成驱动混装。
+
+\section{Camera 连续分析与 ImageReceiver 生命周期修复}
+
+为支持实时检测而不是周期性 JPEG 抓拍，系统相机链路完成以下修改：
+
+\begin{enumerate}
+  \item 将 UVC 相机元数据修正为
+  \texttt{OHOS\_CAMERA\_POSITION\_OTHER} 与
+  \texttt{OHOS\_CAMERA\_CONNECTION\_TYPE\_USB\_PLUGIN}，保持
+  \texttt{mirrorSupported=OFF}；
+  \item 能力表增加 640x360 NV21/YUV420 分析流，同时保留 1280x720
+  RGBA 预览与 JPEG 拍照，允许 PreviewOutput 与 VideoOutput 组合；
+  \item UVC 节点将摄像头原生 YUYV 明确转换为 NV21，按
+  $1.5\times width\times height$ 设置有效帧大小和
+  \texttt{CAMERA\_FORMAT\_YCRCB\_420\_SP}，消除把 YUYV 错标为 YUV420
+  以及 U/V 顺序相反的问题；
+  \item codec 节点取消固定 1280x720 假设，按实际宽高、格式和 stride
+  处理 YUYV/NV21，补齐 NV21 到编码器格式的转换；
+  \item \texttt{ImageReceiver::ReadLastImage} 在 drain 队列时立即归还被覆盖的
+  旧 \texttt{SurfaceBuffer}，不再持续占用 consumer queue；
+  \item \texttt{ImageReceiverBufferProcessor} 持有
+  \texttt{IConsumerSurface} 强引用而不是 \texttt{ImageReceiver*} 裸指针，
+  并删除显式调用析构函数的释放方式，消除 double-destruction 与 image 晚释放时
+  的 use-after-free。
+\end{enumerate}
+
+应用侧已对应接入 \texttt{VideoOutput + ImageReceiver + YUV420} 连续分析，
+并保留 JPEG 兼容回退；检测结果、画框和语音队列均使用同一帧坐标与受控生命周期。
+
+\section{CANN/NAPI 系统镜像集成补充}
+
+原先“\texttt{libyolo\_napi.so} 已执行但 127.0.0.1:5001 被拒绝”的根因是
+镜像没有 Python、\texttt{libascendcl.so} 和可启动的本机推理服务。V1.11 已将
+这部分改为镜像自包含：
+
+\begin{itemize}
+  \item CANN 8.2.RC1、Python 3.10、\texttt{ais\_bench}、
+  \texttt{aclruntime}、\texttt{numpy} 及运行库组成带 SHA-256 清单的压缩载荷；
+  \item \texttt{post-fs-data} 先执行幂等安装与校验，再启动
+  \texttt{yolo\_acl\_service}，不再依赖 \texttt{/cann-install} 手工文件；
+  \item 服务以最小权限用户运行，异常退出可由 init 重新拉起，只监听
+  \texttt{127.0.0.1:5001}；
+  \item NAPI 与 Python 服务统一为版本化紧凑二进制协议：uint8 NCHW 输入、
+  服务端 NMS、最多 100 个框输出，模型在服务进程内持久化；
+  \item 默认禁用 musl 应用进程内直接加载 glibc CANN 的备用路径；
+  \item OM 模型、背景视频和告警语音资源已纳入 HAP rawfile，不再缺少
+  \texttt{background.mp4} 或 \texttt{yolov5s\_ascend310b.om}。
+\end{itemize}
+
+\section{构建配置闭环与完成状态}
+
+V1.11 对所有新增配置执行了分层静态验证：JSON/CFG 解析、shell
+\texttt{bash -n}、Python AST、XML 解析、补丁空白检查和关键依赖顺序断言均通过。
+重点复核了容易出错的 \texttt{BUILD.gn}：
+
+\begin{itemize}
+  \item \texttt{kernel\_driver/BUILD.gn} 的音频补丁 action 输出名、依赖和安装名一致；
+  \item 板级 cfg 与 CANN 载荷均已进入产品依赖组；
+  \item 使用产品命令完成 \texttt{--build-only-gn=true} 配置生成，共生成
+  87463 个 target；
+  \item 对 \texttt{images} 执行 Ninja dry-run 成功，构建图可到达最终
+  \texttt{images.stamp}，共规划 55017 个 action；
+  \item 原始 Ninja 图存在上游重复 rule，产品构建包装器已固定使用
+  \texttt{-w dupbuild=warn}，不属于本轮 GN 修改引入的问题。
+\end{itemize}
+
+至此，教程基础补丁及教程之外的 HDMI 音频、DRM/EDID、Camera、CANN/NAPI、
+HDC、启动时间和内存二次优化均已纳入源码与构建图，V1.11 文档与当前实现保持一致。
+
+\section{OHOS 4000 Ninja 构建故障排查记录}
+
+\subsection{问题现象与正确的定位入口}
+
+执行 310B 构建时，外层构建工具只报告：
+\texttt{[OHOS ERROR] Code: 4000}、\texttt{Error Type: Ninja build error}。
+这段信息是构建包装器的统一错误，不是具体根因。实际定位必须从
+\texttt{out/310B/error.log} 中找到最早出现的编译器或 Ninja 诊断，再结合
+\texttt{out/310B/build.log} 和生成后的 \texttt{build.ninja} 核对输入、输出关系。
+
+本次最早的编译错误位于
+\texttt{foundation/multimedia/audio\_framework/services/audio\_policy/server/src/service/audio\_policy\_service.cpp}：
+在未定义 \texttt{FEATURE\_DTMF\_TONE} 的 310B 编译配置中，
+\texttt{LoadToneDtmfConfig()} 仍被编译，因而找不到
+\texttt{AudioToneParser} 和 \texttt{toneDescriptorMap}。后续大量编译输出只是并行
+任务收尾，不能据此判断为其他模块的根因。
+
+\subsection{排查思路}
+
+排查按以下顺序进行：
+\begin{enumerate}
+  \item 先读取错误日志末尾附近的失败命令，并向上搜索第一个
+  \texttt{error:}、\texttt{FAILED:} 或 \texttt{duplicate output}；
+  \item 对编译错误检查宏定义和源文件条件编译边界；对 Ninja 错误检查
+  \texttt{build.ninja} 中是否有多个规则声明同一输出文件；
+  \item 将重复输出追溯回 GN 模板和各模块的 target 名称，而不是只使用
+  \texttt{-w dupbuild=warn} 隐藏错误；
+  \item 检查 action 脚本是否检查子进程返回值，以及 GN 声明的输出是否真的由
+  action 创建；
+  \item 修改后先重新执行 \texttt{gn gen}，再构建最小相关目标，最后才进行
+  全量镜像构建。
+\end{enumerate}
+
+\subsection{根因与修复}
+
+\begin{description}
+  \item[条件编译边界]
+  将 \texttt{LoadToneDtmfConfig()} 的定义与声明使用的
+  \texttt{FEATURE\_DTMF\_TONE} 条件保持一致。未启用 DTMF 功能时，音频策略服务
+  不再引用不可用的 tone parser 类型。
+
+  \item[通用 stamp 输出冲突]
+  多个 GN action 在相同输出目录使用了通用的
+  \texttt{\$\{target\_name\}.stamp}，导致不同 action 争用同一个 Ninja 输出。
+  应用签名 action 改用 \texttt{\$\{target\_name\}\_sign.stamp}，BPF 和
+  ArkGuard 安装 action 改用带 \texttt{generated} 后缀的独立 stamp；BPF/ArkGuard
+  脚本也显式创建对应 stamp 文件。
+
+  \item[同目录 source set 名称冲突]
+  Account、KV Store、Rosen drawable 和 AV Codec 测试中存在重复的本地 target
+  名称。将其改为带模块语义的名称，并同步修改 deps；同时把重命名后的 target
+  加入 310B sanitizer bypass 列表，避免安全检查阶段再次找不到对应条目。
+
+  \item[BPF action 假成功]
+  \texttt{gen\_bpf\_uapi.py} 原先调用 \texttt{subprocess.run()} 后忽略返回值，
+  内核工具失败时仍可能留下看似完成的构建状态。两次 make 均改为
+  \texttt{check=True}，并在成功后创建 stamp，确保失败能传递给 Ninja。
+\end{description}
+
+本次源码补丁统一保存为
+\texttt{task1\_transplantation/patch\_fix/openharmony-5.0.3-build-fixes.patch}。
+它使用源码树根目录相对路径，应用方式为：
+
+\begin{lstlisting}[style=shell]
+cd /home/hfut/work/5.0.3
+patch -p1 < /home/hfut/work/project3136859-388911/task1_transplantation/patch_fix/openharmony-5.0.3-build-fixes.patch
+\end{lstlisting}
+
+补丁只描述源码和构建配置修改；\texttt{out/310B} 的属主、权限和历史产物属于
+本机环境状态，不应固化进源码补丁。应用补丁后如遇到输出目录权限错误，应先将
+该目录恢复为当前构建用户可写，再重新生成构建图。
+
+\subsection{验证结果}
+
+修复后执行 \texttt{gn gen out/310B} 成功，生成 87463 个 target。BPF action
+能够实际运行并在 make 失败时返回非零状态；随后执行音频策略服务目标完成
+\texttt{1230/1230}，产物为：
+
+\begin{lstlisting}[style=shell]
+out/310B/multimedia/audio_framework/libaudio_policy_service.z.so
+\end{lstlisting}
+
+这证明当前条件编译错误已解决，且目标构建链路能够闭环。本次记录不把目标构建
+等同于整机镜像构建；全量构建仍需在补丁应用、工具链和输出目录权限确认后执行，
+若再次失败仍应以 \texttt{error.log} 中的第一个真实诊断为准。
+
+\subsection{当前构建命令}
+
+在已完成源码准备和补丁应用的前提下，推荐先生成构建图并验证刚修复的目标：
+
+\begin{lstlisting}[style=shell]
+cd /home/hfut/work/5.0.3
+prebuilts/build-tools/linux-x86/bin/gn gen out/310B
+ninja -C out/310B audio_policy_service
+\end{lstlisting}
+
+目标构建通过后，再执行 310B 产品全量构建：
+
+\begin{lstlisting}[style=shell]
+cd /home/hfut/work/5.0.3
+./build.sh --product-name 310B --ccache
+\end{lstlisting}
+
+全量构建成功后，镜像位于
+\texttt{out/310B/packages/phone/images/}；不要用旧的
+\texttt{error.log} 尾部信息代替本次构建结果，应以当前命令的退出码和
+\texttt{build.log} 收尾状态为准。

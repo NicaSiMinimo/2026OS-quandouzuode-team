@@ -1,0 +1,7 @@
+*.mp4
+
+# Local/editor and generated files
+.DS_Store
+Thumbs.db
+*.tmp
+*.log

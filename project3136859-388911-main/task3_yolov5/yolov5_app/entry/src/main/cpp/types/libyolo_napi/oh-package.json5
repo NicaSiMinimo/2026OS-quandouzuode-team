@@ -1,0 +1,6 @@
+{
+  "name": "libyolo_napi.so",
+  "types": "./Index.d.ts",
+  "version": "1.0.0",
+  "description": "AscendCL YOLOv5 OM inference NAPI for Ascend 310B/OpenHarmony."
+}

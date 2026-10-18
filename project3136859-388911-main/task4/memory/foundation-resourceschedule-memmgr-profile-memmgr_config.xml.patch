@@ -1,0 +1,32 @@
+--- a/foundation/resourceschedule/memmgr/profile/memmgr_config.xml
++++ b/foundation/resourceschedule/memmgr/profile/memmgr_config.xml
+@@ -15,10 +15,10 @@
+ -->
+ <Memmgr>
+   <availBufferConfig>
+-      <availBuffer>300</availBuffer>
+-      <minAvailBuffer>250</minAvailBuffer>
+-      <highAvailBuffer>350</highAvailBuffer>
+-      <swapReserve>200</swapReserve>
++      <availBuffer>150</availBuffer>
++      <minAvailBuffer>100</minAvailBuffer>
++      <highAvailBuffer>200</highAvailBuffer>
++      <swapReserve>100</swapReserve>
+   </availBufferConfig>
+   <reclaimConfig>
+     <ZswapdParam id="1">
+@@ -41,10 +41,10 @@
+     </importantBgApps>
+   </reclaimPriorityConfig>
+   <systemMemoryLevelConfig>
+-      <purgeable>1024</purgeable>
+-      <moderate>800</moderate>
+-      <low>700</low>
+-      <critical>600</critical>
++      <purgeable>512</purgeable>
++      <moderate>400</moderate>
++      <low>300</low>
++      <critical>200</critical>
+   </systemMemoryLevelConfig>
+   <killConfig>
+       <killLevel id="1">

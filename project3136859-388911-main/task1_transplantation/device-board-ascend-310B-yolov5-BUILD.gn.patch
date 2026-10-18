@@ -1,0 +1,27 @@
+--- a/device/board/ascend/310B/yolov5/BUILD.gn
++++ b/device/board/ascend/310B/yolov5/BUILD.gn
+@@ -0,0 +1,24 @@
++# device/board/ascend/310B/yolov5/BUILD.gn
++import("//build/ohos.gni")
++import("//device/board/${product_company}/${device_name}/device.gni")
++
++ohos_prebuilt_etc("main_py") {
++  source = "//device/board/${product_company}/${device_name}/yolov5/main.py"
++  part_name = "device_310B"
++  relative_install_dir = "yolov5"
++  install_enable = true
++}
++
++ohos_prebuilt_etc("server_py") {
++  source = "//device/board/${product_company}/${device_name}/yolov5/server.py"
++  part_name = "device_310B"
++  relative_install_dir = "yolov5"
++  install_enable = true
++}
++
++group("yolov5_files") {
++  deps = [
++    ":main_py",
++    ":server_py",
++  ]
++}

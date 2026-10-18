@@ -1,0 +1,10 @@
+--- a/device/board/ascend/310B/cfg/start_yolov5_server.sh
++++ b/device/board/ascend/310B/cfg/start_yolov5_server.sh
+@@ -0,0 +1,7 @@
++#!/system/bin/sh
++while [ ! -f /task3_app/.deployed ]; do
++    sleep 1
++done
++. /cann-install/task2_cann/03_set_cann_env.sh
++cd /task3_app/server
++python3.10 server.py

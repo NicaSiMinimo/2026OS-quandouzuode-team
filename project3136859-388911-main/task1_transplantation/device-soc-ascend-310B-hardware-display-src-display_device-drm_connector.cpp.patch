@@ -1,0 +1,54 @@
+--- a/device/soc/ascend/310B/hardware/display/src/display_device/drm_connector.cpp
++++ b/device/soc/ascend/310B/hardware/display/src/display_device/drm_connector.cpp
+@@ -60,16 +60,48 @@
+     DISPLAY_LOGD("id %{public}d  mode size %{public}d", mId, c.count_modes);
+     mModes.clear();
+     mPreferenceId = INVALID_MODE_ID;
++    bool has1080p = false;
++    int modeIdx = 0;
+     for (int i = 0; i < c.count_modes; i++) {
+         drmModeModeInfoPtr mode = c.modes + i;
+         DISPLAY_LOGD("mode: hdisplay %{public}d, vdisplay %{public}d vrefresh %{public}d type %{public}d",
+             mode->hdisplay, mode->vdisplay, mode->vrefresh, mode->type);
++        if (mode->hdisplay == 1920 && mode->vdisplay == 1080) {
++            has1080p = true;
++        }
+         if ((mPreferenceId == INVALID_MODE_ID) && (mode->type & DRM_MODE_TYPE_PREFERRED)) {
+-            DISPLAY_LOGD("set it to prefernce id %{public}d", i);
+-            mPreferenceId = i;
++            DISPLAY_LOGD("set it to prefernce id %{public}d", modeIdx);
++            mPreferenceId = modeIdx;
+         }
+-        mModes.emplace(i, DrmMode { *mode, i });
++        mModes.emplace(modeIdx, DrmMode { *mode, modeIdx });
++        modeIdx++;
+     }
++
++    /* If no 1080p mode in EDID, replace mode 0 with a standard 1080p@60Hz CVT mode */
++    if (!has1080p && IsConnected()) {
++        drmModeModeInfo mode1080p = { 0 };
++        mode1080p.clock = 148500;                                          /* 148.5 MHz pixel clock */
++        mode1080p.hdisplay = 1920;
++        mode1080p.hsync_start = 2008;
++        mode1080p.hsync_end = 2052;
++        mode1080p.htotal = 2200;
++        mode1080p.hskew = 0;
++        mode1080p.vdisplay = 1080;
++        mode1080p.vsync_start = 1084;
++        mode1080p.vsync_end = 1089;
++        mode1080p.vtotal = 1125;
++        mode1080p.vscan = 0;
++        mode1080p.vrefresh = 60;
++        mode1080p.flags = DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC;
++        snprintf(mode1080p.name, sizeof(mode1080p.name), "1920x1080");
++        mode1080p.type = DRM_MODE_TYPE_PREFERRED;
++
++        /* Replace mode 0 with 1080p (must be at index 0 for drm_crtc compatibility) */
++        mModes[0] = DrmMode { mode1080p, 0 };
++        mPreferenceId = 0;
++        DISPLAY_LOGI("replace mode 0 with 1080p@60Hz");
++    }
++
+     DISPLAY_LOGD("mode count %{public}zd", mModes.size());
+ }
+ 

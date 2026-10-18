@@ -1,0 +1,23 @@
+--- a/device_board_ascend/310BFormatTest/formatSD310B.sh
++++ b/device_board_ascend/310BFormatTest/formatSD310B.sh
+@@ -313,9 +313,20 @@
+     dd if=${FWM_DIR}system.img of=${DEST_DEV}2 bs=4M status=progress
+     if [ $? -ne 0 ];then
+         echo "failed: ${DEST_DEV}2 system.img"
+         return 1
+     fi
+ 
++    # chip_prod 分区（p3，100MB 预留分区），存放产品参数（如 persist.hdc.control）
++    if [ ! -f ${FWM_DIR}chip_prod.img ];then
++        echo "failed: chip_prod.img no exist"
++        return 1
++    fi
++    dd if=${FWM_DIR}chip_prod.img of=${DEST_DEV}3 bs=4M status=progress
++    if [ $? -ne 0 ];then
++        echo "failed: ${DEST_DEV}3 chip_prod.img"
++        return 1
++    fi
++
+     dd if=${FWM_DIR}vendor.img of=${DEST_DEV}4 bs=4M status=progress
+     if [ $? -ne 0 ];then
+         echo "failed: ${DEST_DEV}4 vendor.img"

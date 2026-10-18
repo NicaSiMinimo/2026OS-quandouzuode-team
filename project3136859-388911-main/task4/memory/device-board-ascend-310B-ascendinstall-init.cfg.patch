@@ -1,0 +1,39 @@
+diff --git a/device/board/ascend/310B/ascendinstall/init.cfg b/device/board/ascend/310B/ascendinstall/init.cfg
+index 5e0de76..063a6ea 100644
+--- a/device/board/ascend/310B/ascendinstall/init.cfg
++++ b/device/board/ascend/310B/ascendinstall/init.cfg
+@@ -52,7 +52,7 @@
+                 "write /proc/sys/net/unix/max_dgram_qlen 600",
+                 "write /proc/sys/kernel/sched_rt_runtime_us 950000",
+                 "write /proc/sys/kernel/sched_rt_period_us 1000000",
+-                "write /proc/sys/net/core/rmem_max 16777216",
++                "write /proc/sys/net/core/rmem_max 2097152",
+                 "write /proc/sys/net/core/wmem_max 262144",
+                 "write /proc/sys/net/ipv4/fwmark_reflect 1",
+                 "write /proc/sys/net/ipv6/fwmark_reflect 1",
+@@ -67,7 +67,7 @@
+                 "symlink /proc/self/fd /dev/fd",
+                 "export DOWNLOAD_CACHE /data/cache",
+                 "setrlimit RLIMIT_NICE 40 40",
+-                "setrlimit RLIMIT_NOFILE 32768 32768",
++                "setrlimit RLIMIT_NOFILE 4096 4096",
+                 "write /sys/class/leds/vibrator/trigger transient",
+                 "chown system system /sys/power/state",
+                 "chown system system /sys/power/wakeup_count",
+@@ -200,6 +200,7 @@
+                 "sleep 5",
+                 "sleep 5",
+                 "sleep 5",
++                "wait /dev/davinci0 10",
+                 "start dmp_daemon"
+             ]
+         }, {
+@@ -211,7 +212,7 @@
+                 "chown root system /sys/block/zram0/idle",
+                 "chmod 0664 /sys/block/zram0/idle",
+                 "write /proc/sys/vm/dirty_expire_centisecs 200",
+-                "write /proc/sys/vm/dirty_background_ratio 5",
++                "write /proc/sys/vm/dirty_background_ratio 3",
+                 "chown root radio /proc/cmdline",
+                 "chown update update /dev/block/by-name/misc",
+                 "setparam net.tcp.default_init_rwnd 60"
